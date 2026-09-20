@@ -25,14 +25,14 @@ def decision_text(item):
 def paper_config():
     """Resolve current NSE tokens using Kite instead of asking the user for token IDs."""
     kite = kite_sdk.client()
-    instruments = {str(i['tradingsymbol']): int(i['instrument_token'])
+    instruments = {str(i['tradingsymbol']): (int(i['instrument_token']),str(i.get('name') or i['tradingsymbol']))
                    for i in kite.instruments('NSE') if i.get('exchange') == 'NSE'}
     held = [str(h['tradingsymbol']) for h in kite.holdings() if h.get('exchange') == 'NSE']
     symbols = list(dict.fromkeys(held + list(WATCHLIST)))[:10]
     missing = [s for s in symbols if s not in instruments]
     if missing:
         raise RuntimeError('NSE symbols unavailable in Kite instruments: ' + ', '.join(missing))
-    config = dict(mode='paper', stocks=[dict(symbol=s,instrument_token=instruments[s]) for s in symbols],
+    config = dict(mode='paper', stocks=[dict(symbol=s,instrument_token=instruments[s][0],company=instruments[s][1]) for s in symbols],
                   max_order_inr=5000,max_daily_buy_inr=5000)
     return config
 
@@ -98,9 +98,9 @@ class App:
         window.focus_set()
         tk.Label(window,text='Today’s paper decisions',font=('Segoe UI',20,'bold'),
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
-        tk.Label(window,text='60 completed daily candles · trend averages · breakout · volume',
+        tk.Label(window,text='Daily candles · moving averages · breakout · volume · NIFTY 50 · recent headlines',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
-        tk.Label(window,text='No live news, broad market analysis or candlestick pattern model. No real orders.',
+        tk.Label(window,text='News headlines are unverified; missing data blocks new buys. No real orders.',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,12))
         canvas = tk.Canvas(window,bg='#f3f6fb',highlightthickness=0)
         scrollbar = tk.Scrollbar(window,command=canvas.yview)
@@ -124,6 +124,9 @@ class App:
                      anchor='w').pack(fill='x',padx=16,pady=(0,3))
             tk.Label(card,text='Why: '+reason,font=('Segoe UI',10),bg='white',fg='#52647c',
                      justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,13))
+            if item.get('headlines'):
+                tk.Label(card,text='Recent headline: '+item['headlines'][0]['title'],font=('Segoe UI',9),
+                         bg='white',fg='#52647c',justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,12))
 
     def run(self):
         self.root.mainloop()

@@ -22,6 +22,9 @@ class AutopilotTests(unittest.TestCase):
                                   high=p+1,low=p-1,volume=200 if i==79 else 100))
         self.broker={'history':lambda token,now:self.rows,'quote':lambda symbol:185,
                      'existing_orders':lambda:[],'holdings':lambda:{},'funds':lambda:100000}
+        self.broker['market']=lambda now:{'up':True,'reason':'Index is above prior close and 50-day average.'}
+        self.broker['news']=lambda company,now:{'articles':[{'title':'Routine company update'}],
+            'flagged':[],'reason':'One recent matching headline; not a sentiment claim.'}
 
     def test_automatic_paper_buy_and_idempotent_rerun(self):
         with tempfile.TemporaryDirectory() as d:
@@ -53,6 +56,14 @@ class AutopilotTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 autopilot.run(self.config,pathlib.Path(d)/'state.json',
                     self.now+dt.timedelta(days=1),self.broker)
+
+    def test_missing_news_withholds_buy(self):
+        with tempfile.TemporaryDirectory() as d:
+            broker={**self.broker,'news':lambda company,now:(_ for _ in ()).throw(TimeoutError('offline'))}
+            result=autopilot.run(self.config,pathlib.Path(d)/'state.json',self.now,broker)
+            self.assertEqual(result[0]['action'],'SKIP')
+            self.assertEqual(result[0]['quantity'],0)
+            self.assertIn('News unavailable',result[0]['reason'])
 
 
 if __name__=='__main__': unittest.main()

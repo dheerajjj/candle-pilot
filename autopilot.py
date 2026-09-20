@@ -9,6 +9,7 @@ import pathlib
 
 from agent import signal_details
 import kite_sdk
+import context
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 STATE = pathlib.Path('autopilot_state.json')
@@ -41,7 +42,7 @@ def history(token, now):
     end = now.date() - dt.timedelta(days=1)
     start = end - dt.timedelta(days=180)
     raw = kite_sdk.daily_candles(token, start, end)
-    rows = [dict(date=dt.date.fromisoformat(str(c['date'])[:10]), high=float(c['high']),
+    rows = [dict(date=dt.date.fromisoformat(str(c['date'])[:10]), open=float(c['open']), high=float(c['high']),
                  low=float(c['low']), close=float(c['close']), volume=float(c['volume'])) for c in raw]
     if len(rows) < 65 or (end - rows[-1]['date']).days > 4:
         raise RuntimeError('Historical candles insufficient or stale; no order placed')
@@ -88,6 +89,12 @@ def run(config, state_path=STATE, now=None, broker=None):
     available = broker['funds']() if config['mode'] == 'live' else state['paper_cash']
     spent_today = sum(x.get('notional',0) for x in state['attempts'].values()
                       if x.get('day') == str(now.date()) and x.get('side') == 'BUY')
+    # Context is required for paper BUY suggestions. Live execution remains separate.
+    if config['mode'] == 'paper':
+        try:
+            market_info = broker['market'](now) if 'market' in broker else context.market(now)
+        except Exception as exc:
+            market_info = {'up':False,'reason':'Market data unavailable: '+str(exc)}
     output = []
     for stock in config['stocks']:
         symbol = stock['symbol']
@@ -96,6 +103,21 @@ def run(config, state_path=STATE, now=None, broker=None):
         action = details['signal']
         reason = details['reason']
         prior_close = rows[-1]['close']
+        if config['mode'] == 'paper':
+            pattern = context.candle_pattern(rows)
+            try:
+                news = broker['news'](stock.get('company',symbol),now) if 'news' in broker else context.headlines(stock.get('company',symbol),now)
+            except Exception as exc:
+                news = {'articles':[],'flagged':[],'reason':'News unavailable: '+str(exc),'unavailable':True}
+            reason += f' Candle: {pattern["name"]}. Market: {market_info["reason"]} News: {news["reason"]}'
+            if action == 'BUY' and (not market_info['up'] or news.get('unavailable') or not news['articles'] or news['flagged'] or pattern['name'] == 'Bearish engulfing'):
+                output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':prior_close,
+                               'price_type':'previous close','reason':'BUY withheld: market, recent news, or candle check did not clear. '+reason,
+                               'headlines':news['articles']})
+                continue
+            recent_headlines = news['articles']
+        else:
+            recent_headlines = []
         key = f'{now.date()}:{symbol}'
         if key in state['attempts']:
             output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':None,'reason':'A paper action was already recorded for this stock today.'})
@@ -106,7 +128,7 @@ def run(config, state_path=STATE, now=None, broker=None):
                 reason = f'Buy signal, but already holding {qty_held} paper shares. '+reason
             elif action == 'SELL' and not qty_held:
                 reason = 'Sell signal, but no paper shares to sell. '+reason
-            output.append({'symbol':symbol,'action':'HOLD','signal':action,'quantity':0,'price':prior_close,'price_type':'previous close','reason':reason})
+            output.append({'symbol':symbol,'action':'HOLD','signal':action,'quantity':0,'price':prior_close,'price_type':'previous close','reason':reason,'headlines':recent_headlines})
             continue
         price = broker['quote'](symbol)
         if abs(price/rows[-1]['close']-1) > .12:
@@ -138,7 +160,7 @@ def run(config, state_path=STATE, now=None, broker=None):
                 state['paper_holdings'][symbol] = qty_held-qty
             state['attempts'][key]['status'] = 'paper_filled'
             atomic_save(state_path,state)
-            output.append({'symbol':symbol,'action':action,'quantity':qty,'paper_price':price,'price':price,'price_type':'simulated fill','reason':reason})
+            output.append({'symbol':symbol,'action':action,'quantity':qty,'paper_price':price,'price':price,'price_type':'simulated fill','reason':reason,'headlines':recent_headlines})
         else:
             limit = round(price*(1.005 if action == 'BUY' else .995),2)
             if action == 'BUY' and limit*qty > min(config['max_order_inr'],config['max_daily_buy_inr']-spent_today,available):
