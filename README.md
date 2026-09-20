@@ -48,3 +48,14 @@ python agent.py order --symbol INFY --side BUY --quantity 1 --limit-price 1500 -
 ```
 
 Before any unattended live system, add authenticated position reconciliation, stale-data checks, broker-compliant rate and order limits, trading-hours checks, daily-loss guard across holdings, order deduplication after network failures, a kill switch, logging/alerts and broker/exchange rule review. Never put Kite credentials into a chat prompt or source file.
+
+## Automated daily runner
+
+`autopilot.py` fetches recent **real** Kite daily candles for your selected NSE stocks, calculates yesterday's signal, checks a current quote, and makes a daily decision. It can place CNC limit orders when explicitly configured for live mode. It does not read market-wide news, predict returns, or guarantee profits. Start in paper mode to observe it first.
+
+1. Create a [Kite Connect app](https://kite.trade/docs/connect/v3/) and obtain a valid daily access token using Zerodha's **official** login flow. Put `KITE_API_KEY` and `KITE_ACCESS_TOKEN` in local environment variables or a secret manager. Never put them in this public repository or send them in chat.
+2. Copy `autopilot_config.example.json` to `autopilot_config.json`; verify the instrument token for each selected symbol from Kite's instrument list. Set your own risk limits, at most ₹5,000 per order and ₹5,000 bought per day in this version. The default is `paper`.
+3. Run `python autopilot.py --config autopilot_config.json` once during market hours. The output says what it decided; it records decisions in `autopilot_state.json` to avoid submitting a duplicate on the same day.
+4. To run automatically on Windows, create a **daily 10:00 a.m. IST task** in Windows Task Scheduler that starts `python` with arguments `autopilot.py --config autopilot_config.json` and sets **Start in** to your project folder. Your Kite session token must be valid that day; [Kite documents expiry at 6 a.m. the next day](https://kite.trade/docs/connect/v3/user/). Scheduling does not bypass required Zerodha authentication.
+
+Live mode is an **experimental execution path** that requires changing the local config mode to `live` and setting `ENABLE_LIVE_TRADING=YES`. It checks Kite holdings, available cash, existing tagged orders and daily caps, but this is not a production trading service: there is no live news feed, complete exchange-holiday calendar, corporate-action handling, full multi-day order reconciliation, or automatic token renewal. Do not enable live trading until the strategy is validated on real data, broker/API requirements are confirmed, and the remaining safeguards are built and reviewed. If a Kite order request times out after submission, the program will not retry it; inspect Kite and reconcile the attempt manually.
