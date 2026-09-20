@@ -22,10 +22,12 @@ class PortfolioTests(unittest.TestCase):
                                           'flagged':[],'reason':'One current headline'}}
         config={'stocks':[{'symbol':s,'instrument_token':i,'company':s}
                           for i,s in enumerate(('INFY','TCS'))]}
+        config['stocks'][0]['company']='Infosys Limited'
         report=portfolio.recommend(config,now,source)
         self.assertEqual([x['quantity'] for x in report['items']],[10,10])
         self.assertLessEqual(report['proposed'],report['budget'])
         self.assertEqual(report['cash'],10000)
+        self.assertEqual(report['items'][0]['company'],'Infosys Limited')
 
     def test_news_outage_disables_a_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)

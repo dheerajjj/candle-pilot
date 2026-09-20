@@ -1,5 +1,9 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.5.2: company names on result cards
+
+Each desktop suggestion now displays the NSE ticker and Kite instrument company name, including for held stocks and stocks skipped because data is unavailable. For example, `INFY` is shown together with the name returned for that instrument by Kite. No live order is sent.
+
 ## Version 0.5.1: review existing holdings
 
 The desktop display includes held NSE equities alongside new buy candidates. If the completed daily-candle exit rule triggers for a holding, the card says **SELL** and shows the quantity currently reported by Kite, its current quote, and the exact rule. SELL is a **review prompt**, not an order or a guarantee that selling is right. Other holdings show HOLD with a reason. Suggested BUY quantities are budgeted separately and are never funded by hypothetical sales. No Kite orders are submitted by the desktop app.

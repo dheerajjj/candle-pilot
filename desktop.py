@@ -117,6 +117,9 @@ class App:
                      bg='white',fg='#172b4d').pack(side='left')
             tk.Label(header,text=item['action'],font=('Segoe UI',11,'bold'),
                      bg='white',fg=COLORS.get(item['action'],'#52647c')).pack(side='right')
+            if item.get('company') and item['company']!=item['symbol']:
+                tk.Label(card,text=item['company'],font=('Segoe UI',10),bg='white',fg='#52647c',
+                         anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,3))
             detail, reason = decision_text(item)
             tk.Label(card,text=detail,font=('Segoe UI',10),bg='white',fg='#253b5a',
                      anchor='w').pack(fill='x',padx=16,pady=(0,3))

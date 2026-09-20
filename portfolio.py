@@ -40,7 +40,7 @@ def recommend(config, now=None, source=None):
                     {'articles':[],'reason':'Not requested because a technical, market, or holdings check did not clear.'})
             why = (f'{detail["reason"]} Candle: {candle["name"]}. '
                    f'Market: {market["reason"]} News: {news["reason"]}')
-            card = {'symbol':symbol,'action':'HOLD','quantity':0,'price':price,
+            card = {'symbol':symbol,'company':stock.get('company',symbol),'action':'HOLD','quantity':0,'price':price,
                     'price_type':'current quote','reason':why,'headlines':news.get('articles',[])[:1]}
             if held.get(symbol,0)>0:
                 if detail['signal']=='SELL':
@@ -69,7 +69,7 @@ def recommend(config, now=None, source=None):
                 continue
             rows_out.append(card)
         except Exception as exc:
-            rows_out.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':None,
+            rows_out.append({'symbol':symbol,'company':stock.get('company',symbol),'action':'SKIP','quantity':0,'price':None,
                              'reason':'Data or news unavailable; no buy suggested: '+str(exc)})
     # Keep half the account cash untouched, cap total at ₹5k and each name at ₹2.5k.
     limit=min(cash*.5,5000.0)
