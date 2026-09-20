@@ -1,5 +1,11 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.6: intraday confirmation
+
+For a potential new BUY, the desktop app requests Kite's **5minute** historical candles from today's 09:15 IST open. It ignores incomplete intervals and requires at least two completed, recent candles. It checks the current quote against the last completed close and a volume-weighted typical price, and rejects a sharp drop in the latest completed close. Missing, stale, or invalid intraday candles withhold the BUY; the result card explains why. This is an additional heuristic, not a tested prediction. Before roughly 09:30:30 IST, two completed candles may not yet be available, so no new BUY will clear this guard. Held-stock SELL/HOLD reviews do not depend on this intraday BUY check.
+
+The app continues to request one current quote when generating its read-only report. It **does not run KiteTicker WebSocket streaming**: KiteTicker is for continuously updated prices and would require a continuously running application, connection management, and tick freshness checks. The app already uses Kite's current REST quote plus the completed 5-minute historical data for this one-time decision. [Kite historical candles](https://kite.trade/docs/connect/v3/historical/) and [KiteTicker streaming](https://kite.trade/docs/connect/v3/agent-setup/#4-stream-live-market-data).
+
 ## Version 0.5.2: company names on result cards
 
 Each desktop suggestion now displays the NSE ticker and Kite instrument company name, including for held stocks and stocks skipped because data is unavailable. For example, `INFY` is shown together with the name returned for that instrument by Kite. No live order is sent.

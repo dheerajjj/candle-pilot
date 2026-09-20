@@ -96,7 +96,7 @@ class App:
         screen=report.get('screen',{})
         tk.Label(window,text=f'NSE equities: {screen.get("universe",0):,}  •  Quoted: {screen.get("quoted",0):,}  •  Holdings: {screen.get("held_count",0)}  •  New candidates: {screen.get("new_count",0)}',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,2))
-        tk.Label(window,text='Daily candles · moving averages · breakout · volume · NIFTY 50 · recent headlines',
+        tk.Label(window,text='Daily + completed 5-minute candles · NIFTY 50 · recent headlines',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
         tk.Label(window,text='Research suggestions only. Headlines can be inaccurate; no real orders are placed.',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,12))

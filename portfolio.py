@@ -6,6 +6,7 @@ import statistics
 import autopilot
 import context
 import kite_sdk
+import intraday
 from agent import signal_details
 
 
@@ -15,7 +16,8 @@ def recommend(config, now=None, source=None):
     if now.weekday() >= 5 or not (dt.time(9,20) <= now.time() <= dt.time(14,55)):
         raise ValueError('Run on a weekday during market hours, 09:20–14:55 IST')
     source = source or {'cash':kite_sdk.available_cash,'holdings':kite_sdk.holdings,
-        'market':context.market,'history':autopilot.history,'quote':autopilot.quote,'news':context.headlines}
+        'market':context.market,'history':autopilot.history,'quote':autopilot.quote,
+        'news':context.headlines,'intraday':intraday.assess}
     cash = float(source['cash']())
     if not math.isfinite(cash) or cash < 0:
         raise ValueError('Kite available funds unavailable; no recommendations made')
@@ -36,10 +38,12 @@ def recommend(config, now=None, source=None):
                 raise ValueError('Invalid quote')
             eligible = (not held.get(symbol,0) and detail['signal']=='BUY' and market['up']
                         and candle['name']!='Bearish engulfing' and abs(price/bars[-1]['close']-1)<=.12)
-            news = (source['news'](stock.get('company',symbol),now) if eligible else
+            minutes=(source['intraday'](stock['instrument_token'],now,price) if eligible else
+                     {'up':False,'reason':'Not requested because an earlier check did not clear.'})
+            news = (source['news'](stock.get('company',symbol),now) if eligible and minutes['up'] else
                     {'articles':[],'reason':'Not requested because a technical, market, or holdings check did not clear.'})
             why = (f'{detail["reason"]} Candle: {candle["name"]}. '
-                   f'Market: {market["reason"]} News: {news["reason"]}')
+                   f'Market: {market["reason"]} Intraday: {minutes["reason"]} News: {news["reason"]}')
             card = {'symbol':symbol,'company':stock.get('company',symbol),'action':'HOLD','quantity':0,'price':price,
                     'price_type':'current quote','reason':why,'headlines':news.get('articles',[])[:1]}
             if held.get(symbol,0)>0:
@@ -57,6 +61,9 @@ def recommend(config, now=None, source=None):
             elif abs(price/bars[-1]['close']-1)>.12:
                 card['action']='SKIP'
                 card['reason']='Current price moved more than 12% from last close. '+why
+            elif not minutes['up']:
+                card['action']='SKIP'
+                card['reason']='Buy withheld by completed 5-minute candle check. '+why
             elif not news.get('articles') or news.get('flagged'):
                 card['action']='SKIP'
                 card['reason']='Buy withheld by missing news or headline review flag. '+why

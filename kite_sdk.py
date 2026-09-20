@@ -16,6 +16,10 @@ def daily_candles(instrument_token, start, end):
     return client().historical_data(int(instrument_token), start, end, 'day')
 
 
+def five_minute_candles(instrument_token, start, end):
+    return client().historical_data(int(instrument_token), start, end, '5minute')
+
+
 def current_quote(symbol):
     return client().quote('NSE:'+symbol)['NSE:'+symbol]
 

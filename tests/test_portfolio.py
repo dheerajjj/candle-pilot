@@ -18,6 +18,7 @@ class PortfolioTests(unittest.TestCase):
         source={'cash':lambda:10000,'holdings':lambda:[],
                 'market':lambda now:{'up':True,'reason':'Index up'},
                 'history':lambda token,now:bars,'quote':lambda symbol:185,
+                'intraday':lambda token,now,price:{'up':True,'reason':'Completed 5-minute candles support quote'},
                 'news':lambda company,now:{'articles':[{'title':'Routine company update'}],
                                           'flagged':[],'reason':'One current headline'}}
         config={'stocks':[{'symbol':s,'instrument_token':i,'company':s}
@@ -39,10 +40,27 @@ class PortfolioTests(unittest.TestCase):
         source={'cash':lambda:10000,'holdings':lambda:[],
                 'market':lambda now:{'up':True,'reason':'Index up'},
                 'history':lambda token,now:bars, 'quote':lambda symbol:185,
+                'intraday':lambda token,now,price:{'up':True,'reason':'Intraday clear'},
                 'news':lambda company,now:(_ for _ in ()).throw(TimeoutError('offline'))}
         result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
         self.assertEqual(result['proposed'],0)
         self.assertEqual(result['items'][0]['action'],'SKIP')
+
+    def test_missing_intraday_candles_withhold_buy(self):
+        now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
+        bars=[]
+        for i in range(80):
+            p=100+i+(5 if i==79 else 0)
+            bars.append(dict(date=now.date()-dt.timedelta(days=80-i),open=p-.5,
+                high=p+1,low=p-1,close=p,volume=200 if i==79 else 100))
+        source={'cash':lambda:10000,'holdings':lambda:[],
+                'market':lambda now:{'up':True,'reason':'Index up'},
+                'history':lambda token,now:bars,'quote':lambda symbol:185,
+                'intraday':lambda token,now,price:(_ for _ in ()).throw(ValueError('stale')),
+                'news':lambda company,now:self.fail('Do not fetch news after intraday failure')}
+        result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
+        self.assertEqual(result['items'][0]['action'],'SKIP')
+        self.assertEqual(result['proposed'],0)
 
     def test_existing_holding_shows_sell_review_with_actual_quantity(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
