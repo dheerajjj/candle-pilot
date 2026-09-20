@@ -2,6 +2,17 @@
 
 Python 3.11+; standard library only. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
 
+## Try it now with sample data
+
+The included `examples/demo_synthetic.csv` contains **fabricated prices**, only to verify that the program runs. It is not INFY or any real stock; its returns say nothing about investment performance. From the repository folder, run:
+
+```bash
+python agent.py backtest --csv examples/demo_synthetic.csv --output demo_results.json
+python agent.py paper --csv examples/demo_synthetic.csv --symbol DEMO --state demo_paper.json
+```
+
+For real analysis, supply a daily CSV exported from an authorized market data provider, or fetch candles with your own Kite Connect credentials as shown below. A filename like `daily.csv` in the commands is a placeholder: create that file first or pass the actual path.
+
 ## Inputs
 
 `daily.csv` needs `date,open,high,low,close,volume` in ascending date order, at least 65 rows. `open` is retained on fetch but this prototype fills on the next **close** to avoid same-day look-ahead. Its simulated price, fees and slippage are approximations; real execution can differ. Adjust prices for splits and dividends when evaluating long histories. Optional `news.csv` is `date,score`, with a *point-in-time* score from -1 to 1 (negative news below -0.5 vetoes holding). There is no built-in live news feed or LLM: news scores must come from a properly licensed external data service and be timestamped before trading. Never backfill hindsight headlines into tests.
