@@ -10,6 +10,7 @@ import credentials
 import kite_sdk
 import autopilot
 import portfolio
+import screener
 
 ROOT = pathlib.Path(__file__).resolve().parent
 WATCHLIST = ('INFY', 'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK')
@@ -24,18 +25,8 @@ def decision_text(item):
 
 
 def paper_config():
-    """Resolve current NSE tokens using Kite instead of asking the user for token IDs."""
-    kite = kite_sdk.client()
-    instruments = {str(i['tradingsymbol']): (int(i['instrument_token']),str(i.get('name') or i['tradingsymbol']))
-                   for i in kite.instruments('NSE') if i.get('exchange') == 'NSE'}
-    held = [str(h['tradingsymbol']) for h in kite.holdings() if h.get('exchange') == 'NSE']
-    symbols = list(dict.fromkeys(held + list(WATCHLIST)))[:10]
-    missing = [s for s in symbols if s not in instruments]
-    if missing:
-        raise RuntimeError('NSE symbols unavailable in Kite instruments: ' + ', '.join(missing))
-    config = dict(mode='paper', stocks=[dict(symbol=s,instrument_token=instruments[s][0],company=instruments[s][1]) for s in symbols],
-                  max_order_inr=5000,max_daily_buy_inr=5000)
-    return config
+    result=screener.shortlist()
+    return dict(mode='paper', **result, max_order_inr=5000,max_daily_buy_inr=5000)
 
 
 class App:
@@ -75,12 +66,13 @@ class App:
     def worker(self):
         try:
             credentials.login_browser()
-            self.root.after(0,lambda:self.status.set('Login complete. Checking your paper watchlist…'))
+            self.root.after(0,lambda:self.status.set('Login complete. Screening NSE equities; this may take a minute…'))
             now = dt.datetime.now(autopilot.IST)
             if now.weekday() >= 5 or not (dt.time(9,20) <= now.time() <= dt.time(14,55)):
                 raise RuntimeError('Login succeeded. Run again on a weekday between 09:20 and 14:55 IST to make a paper decision.')
             config = paper_config()
             report = portfolio.recommend(config,now=now)
+            report['screen']=config
             self.root.after(0,lambda:self.show_report(report))
             self.root.after(0,lambda:self.status.set('Suggestions ready. No real orders were sent.'))
         except Exception as exc:
@@ -101,6 +93,9 @@ class App:
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
         tk.Label(window,text=f'Kite available cash: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
                  font=('Segoe UI',11,'bold'),bg='#f3f6fb',fg='#087a56').pack(anchor='w',padx=23,pady=(4,2))
+        screen=report.get('screen',{})
+        tk.Label(window,text=f'NSE equities: {screen.get("universe",0):,}  •  Quoted: {screen.get("quoted",0):,}  •  Holdings: {screen.get("held_count",0)}  •  New candidates: {screen.get("new_count",0)}',
+                 font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,2))
         tk.Label(window,text='Daily candles · moving averages · breakout · volume · NIFTY 50 · recent headlines',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
         tk.Label(window,text='Research suggestions only. Headlines can be inaccurate; no real orders are placed.',

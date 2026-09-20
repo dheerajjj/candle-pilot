@@ -29,9 +29,14 @@ class PortfolioTests(unittest.TestCase):
 
     def test_news_outage_disables_a_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
+        bars=[]
+        for i in range(80):
+            p=100+i+(5 if i==79 else 0)
+            bars.append(dict(date=now.date()-dt.timedelta(days=80-i),open=p-.5,
+                             high=p+1,low=p-1,close=p,volume=200 if i==79 else 100))
         source={'cash':lambda:10000,'holdings':lambda:[],
                 'market':lambda now:{'up':True,'reason':'Index up'},
-                'history':lambda token,now:[], 'quote':lambda symbol:100,
+                'history':lambda token,now:bars, 'quote':lambda symbol:185,
                 'news':lambda company,now:(_ for _ in ()).throw(TimeoutError('offline'))}
         result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
         self.assertEqual(result['proposed'],0)

@@ -31,10 +31,13 @@ def recommend(config, now=None, source=None):
             bars = source['history'](stock['instrument_token'],now)
             detail = signal_details(bars,len(bars)-1)
             candle = context.candle_pattern(bars)
-            news = source['news'](stock.get('company',symbol),now)
             price = float(source['quote'](symbol))
             if not math.isfinite(price) or price <= 0:
                 raise ValueError('Invalid quote')
+            eligible = (not held.get(symbol,0) and detail['signal']=='BUY' and market['up']
+                        and candle['name']!='Bearish engulfing' and abs(price/bars[-1]['close']-1)<=.12)
+            news = (source['news'](stock.get('company',symbol),now) if eligible else
+                    {'articles':[],'reason':'Not requested because a technical, market, or holdings check did not clear.'})
             why = (f'{detail["reason"]} Candle: {candle["name"]}. '
                    f'Market: {market["reason"]} News: {news["reason"]}')
             card = {'symbol':symbol,'action':'HOLD','quantity':0,'price':price,
@@ -43,12 +46,15 @@ def recommend(config, now=None, source=None):
                 card['reason']='Already held in Kite; no additional buy suggested. '+why
             elif detail['signal']!='BUY':
                 card['reason']='Buy conditions did not clear. '+why
-            elif not market['up'] or not news.get('articles') or news.get('flagged') or candle['name']=='Bearish engulfing':
+            elif not market['up'] or candle['name']=='Bearish engulfing':
                 card['action']='SKIP'
-                card['reason']='Buy withheld by market, news or candle check. '+why
+                card['reason']='Buy withheld by market or candle check. '+why
             elif abs(price/bars[-1]['close']-1)>.12:
                 card['action']='SKIP'
                 card['reason']='Current price moved more than 12% from last close. '+why
+            elif not news.get('articles') or news.get('flagged'):
+                card['action']='SKIP'
+                card['reason']='Buy withheld by missing news or headline review flag. '+why
             else:
                 recent=bars[-1]
                 prior_high=max(x['high'] for x in bars[-21:-1])

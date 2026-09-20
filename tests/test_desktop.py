@@ -25,11 +25,14 @@ class DesktopTests(unittest.TestCase):
             'price_type':'previous close'})
         self.assertIn('previous close',detail)
 
-    def test_watchlist_resolved_from_kite_in_paper_mode(self):
-        with patch.object(desktop.kite_sdk,'client',return_value=FakeClient()):
+    def test_full_market_shortlist_used_for_desktop(self):
+        sample={'stocks':[{'symbol':'OTHER','instrument_token':100,'company':'Other Co'}],
+                'universe':2000,'quoted':1900,'eligible':100,'deep_count':1}
+        with patch.object(desktop.screener,'shortlist',return_value=sample):
             config=desktop.paper_config()
         self.assertEqual(config['mode'],'paper')
-        self.assertEqual(len(config['stocks']),len(desktop.WATCHLIST))
+        self.assertEqual(config['universe'],2000)
+        self.assertEqual(len(config['stocks']),1)
         self.assertEqual(config['stocks'][0]['instrument_token'],100)
         self.assertLessEqual(config['max_order_inr'],5000)
 
