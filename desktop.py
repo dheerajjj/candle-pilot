@@ -2,6 +2,8 @@
 import datetime as dt
 import json
 import pathlib
+import queue
+import time
 import threading
 import tkinter as tk
 from tkinter import messagebox, simpledialog
@@ -11,6 +13,7 @@ import kite_sdk
 import autopilot
 import portfolio
 import screener
+import live_stream
 
 ROOT = pathlib.Path(__file__).resolve().parent
 WATCHLIST = ('INFY', 'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK')
@@ -100,6 +103,9 @@ class App:
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
         tk.Label(window,text='Research suggestions only. Headlines can be inaccurate; no real orders are placed.',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,12))
+        stream_status=tk.StringVar(value='Connecting live Kite prices…')
+        tk.Label(window,textvariable=stream_status,font=('Segoe UI',10),bg='#f3f6fb',
+                 fg='#52647c',wraplength=700).pack(anchor='w',padx=23,pady=(0,8))
         canvas = tk.Canvas(window,bg='#f3f6fb',highlightthickness=0)
         scrollbar = tk.Scrollbar(window,command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -108,6 +114,8 @@ class App:
         cards = tk.Frame(canvas,bg='#f3f6fb')
         canvas.create_window((0,0),window=cards,anchor='nw',width=728)
         cards.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+        labels={}
+        initial={}
         for item in report['items']:
             card = tk.Frame(cards,bg='white',highlightbackground='#dce3ed',highlightthickness=1)
             card.pack(fill='x',pady=(0,10))
@@ -125,9 +133,53 @@ class App:
                      anchor='w').pack(fill='x',padx=16,pady=(0,3))
             tk.Label(card,text='Why: '+reason,font=('Segoe UI',10),bg='white',fg='#52647c',
                      justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,13))
+            live_label=tk.StringVar(value='Live price: waiting for tick…')
+            tk.Label(card,textvariable=live_label,font=('Segoe UI',10),bg='white',fg='#087a56',
+                     anchor='w').pack(fill='x',padx=16,pady=(0,10))
+            labels[item['symbol']]=live_label
+            initial[item['symbol']]=item.get('price')
             if item.get('headlines'):
                 tk.Label(card,text='Recent headline: '+item['headlines'][0]['title'],font=('Segoe UI',9),
                          bg='white',fg='#52647c',justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,12))
+        token_to_symbol={int(stock['instrument_token']):stock['symbol']
+                         for stock in screen.get('stocks',[]) if stock['symbol'] in labels}
+        stream=live_stream.LivePrices(token_to_symbol)
+        last_tick={}
+        live_price={}
+        def close_window():
+            stream.stop()
+            window.destroy()
+        window.protocol('WM_DELETE_WINDOW',close_window)
+        window.bind('<Destroy>',lambda event:stream.stop() if event.widget is window else None)
+        try:
+            stream.start()
+        except Exception as exc:
+            stream_status.set('Live prices unavailable: '+str(exc))
+            return
+
+        def refresh_ticks():
+            if not window.winfo_exists():
+                return
+            try:
+                while True:
+                    event=stream.events.get_nowait()
+                    if event[0]=='status':
+                        stream_status.set(event[1])
+                    elif event[0]=='tick' and event[1] in token_to_symbol:
+                        symbol=token_to_symbol[event[1]]
+                        price=event[2]
+                        baseline=initial[symbol]
+                        changed=baseline is not None and baseline>0 and abs(price/baseline-1)>.01
+                        labels[symbol].set(f'Live price: ₹{price:,.2f}'+('  •  Moved >1%: rerun analysis before acting' if changed else ''))
+                        last_tick[symbol]=time.monotonic()
+                        live_price[symbol]=price
+            except queue.Empty:
+                pass
+            for symbol,seen in last_tick.items():
+                if time.monotonic()-seen>60:
+                    labels[symbol].set(f'Last received price: ₹{live_price[symbol]:,.2f}  •  No tick for 60 s; may be stale')
+            window.after(500,refresh_ticks)
+        window.after(500,refresh_ticks)
 
     def run(self):
         self.root.mainloop()

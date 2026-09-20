@@ -1,10 +1,16 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.7: live prices while the results window is open
+
+After the user logs in and a read-only recommendation report appears, Candle Pilot now opens **one** official KiteTicker WebSocket connection in a separate thread and subscribes to the report's instrument tokens in LTP mode. Each card shows the last received live price. The connection closes when the results window closes. The UI indicates disconnections, reconnects, prices that moved over 1% from the analyzed quote, and any symbol with no new tick for 60 seconds. No tick means no recent trade update; it does not necessarily mean the socket failed.
+
+The BUY/SELL/HOLD suggestion, quantity, reason, cash and suggested spend remain the **snapshot from the original analysis**. A moving live price does not automatically refresh the underlying historical candle/news analysis or alter a proposed quantity. Close the results window and run the analysis again before acting on a changed price. The completed 5-minute candle check remains required for new BUY ideas; WebSocket LTP ticks supply live prices, **not completed candles**. If WebSocket access is unavailable, the result cards still show the original quote and explain that the live stream could not start. The desktop app never places orders. [Official Zerodha WebSocket docs](https://kite.trade/docs/connect/v3/websocket/) and [threaded SDK example](https://github.com/zerodha/pykiteconnect/blob/master/examples/threaded_ticker.py).
+
 ## Version 0.6: intraday confirmation
 
 For a potential new BUY, the desktop app requests Kite's **5minute** historical candles from today's 09:15 IST open. It ignores incomplete intervals and requires at least two completed, recent candles. It checks the current quote against the last completed close and a volume-weighted typical price, and rejects a sharp drop in the latest completed close. Missing, stale, or invalid intraday candles withhold the BUY; the result card explains why. This is an additional heuristic, not a tested prediction. Before roughly 09:30:30 IST, two completed candles may not yet be available, so no new BUY will clear this guard. Held-stock SELL/HOLD reviews do not depend on this intraday BUY check.
 
-The app continues to request one current quote when generating its read-only report. It **does not run KiteTicker WebSocket streaming**: KiteTicker is for continuously updated prices and would require a continuously running application, connection management, and tick freshness checks. The app already uses Kite's current REST quote plus the completed 5-minute historical data for this one-time decision. [Kite historical candles](https://kite.trade/docs/connect/v3/historical/) and [KiteTicker streaming](https://kite.trade/docs/connect/v3/agent-setup/#4-stream-live-market-data).
+The app requests a current quote and completed 5-minute historical candles while generating its read-only report. Version 0.7 additionally streams live prices while the results window stays open, but does not automatically regenerate signals from each tick. [Kite historical candles](https://kite.trade/docs/connect/v3/historical/) and [KiteTicker streaming](https://kite.trade/docs/connect/v3/agent-setup/#4-stream-live-market-data).
 
 ## Version 0.5.2: company names on result cards
 
