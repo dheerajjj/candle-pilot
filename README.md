@@ -1,5 +1,11 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.2: readable paper results
+
+After a weekday login, the desktop window shows one card per stock with its paper action, quantity, price and the rule that caused the decision. BUY/SELL prices are simulated fills at the current quote. HOLD displays the last completed daily close as a reference; SKIP may have no price if the quote was not fetched. Quantity zero means no transaction. These are rule explanations, not confidence scores or predictions.
+
+The paper strategy examines around 60 completed daily candles: 20/60-day moving averages, a 20-day high breakout and volume against the prior 20 days. A current quote is used for paper fills and a large-move guard. The desktop flow does **not** supply company news scores, assess a broad market index, recognize candlestick patterns or forecast future returns. It also does not place real orders. More inputs require a trustworthy point-in-time news source, index data and validation on independent periods before they should influence any decisions.
+
 Python 3.11+; uses Zerodha’s official `kiteconnect` SDK and Windows Credential Manager through `keyring`. Install dependencies using `uv sync` or `python -m pip install -r requirements.txt`. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
 
 ## One-click Windows setup (recommended)

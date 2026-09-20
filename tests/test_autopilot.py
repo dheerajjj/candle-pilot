@@ -28,6 +28,9 @@ class AutopilotTests(unittest.TestCase):
             path=pathlib.Path(d)/'state.json'
             first=autopilot.run(self.config,path,self.now,self.broker)
             self.assertEqual(first[0]['action'],'BUY')
+            self.assertGreater(first[0]['quantity'],0)
+            self.assertEqual(first[0]['price'],185)
+            self.assertIn('20-day high',first[0]['reason'])
             self.assertEqual(autopilot.run(self.config,path,self.now,self.broker)[0]['action'],'SKIP')
             state=json.loads(path.read_text())
             self.assertGreater(state['paper_holdings']['INFY'],0)

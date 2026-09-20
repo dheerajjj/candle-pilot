@@ -7,7 +7,7 @@ import math
 import os
 import pathlib
 
-from agent import signal
+from agent import signal_details
 import kite_sdk
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
@@ -92,18 +92,25 @@ def run(config, state_path=STATE, now=None, broker=None):
     for stock in config['stocks']:
         symbol = stock['symbol']
         rows = broker['history'](stock['instrument_token'], now)
-        action = signal(rows, len(rows)-1)
+        details = signal_details(rows, len(rows)-1)
+        action = details['signal']
+        reason = details['reason']
+        prior_close = rows[-1]['close']
         key = f'{now.date()}:{symbol}'
         if key in state['attempts']:
-            output.append({'symbol':symbol,'action':'SKIP','reason':'Already attempted today'})
+            output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':None,'reason':'A paper action was already recorded for this stock today.'})
             continue
         qty_held = int(held.get(symbol,0))
         if action == 'HOLD' or action == 'BUY' and qty_held or action == 'SELL' and not qty_held:
-            output.append({'symbol':symbol,'action':'HOLD','signal':action})
+            if action == 'BUY' and qty_held:
+                reason = f'Buy signal, but already holding {qty_held} paper shares. '+reason
+            elif action == 'SELL' and not qty_held:
+                reason = 'Sell signal, but no paper shares to sell. '+reason
+            output.append({'symbol':symbol,'action':'HOLD','signal':action,'quantity':0,'price':prior_close,'price_type':'previous close','reason':reason})
             continue
         price = broker['quote'](symbol)
         if abs(price/rows[-1]['close']-1) > .12:
-            output.append({'symbol':symbol,'action':'SKIP','reason':'Quote moved >12% from prior close'})
+            output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':price,'price_type':'current quote','reason':'Current quote moved more than 12% from the last completed close. '+reason})
             continue
         if action == 'BUY':
             budget = min(config['max_order_inr'],config['max_daily_buy_inr']-spent_today,available)
@@ -111,11 +118,11 @@ def run(config, state_path=STATE, now=None, broker=None):
         else:
             qty = min(10,qty_held)
         if qty < 1:
-            output.append({'symbol':symbol,'action':'SKIP','reason':'Insufficient budget or holdings'})
+            output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':price,'price_type':'current quote','reason':'Insufficient paper budget or holdings. '+reason})
             continue
         tag = 'CP'+hashlib.sha256(key.encode()).hexdigest()[:18]
         if config['mode'] == 'live' and any(o.get('tag') == tag for o in prior):
-            output.append({'symbol':symbol,'action':'SKIP','reason':'Matching order already exists in Kite'})
+            output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':price,'price_type':'current quote','reason':'Matching order already exists in Kite. '+reason})
             continue
         # Before any order POST, persist an intent. On timeouts, never auto retry.
         state['attempts'][key] = {'day':str(now.date()),'side':action,'quantity':qty,
@@ -131,18 +138,19 @@ def run(config, state_path=STATE, now=None, broker=None):
                 state['paper_holdings'][symbol] = qty_held-qty
             state['attempts'][key]['status'] = 'paper_filled'
             atomic_save(state_path,state)
-            output.append({'symbol':symbol,'action':action,'quantity':qty,'paper_price':price})
+            output.append({'symbol':symbol,'action':action,'quantity':qty,'paper_price':price,'price':price,'price_type':'simulated fill','reason':reason})
         else:
             limit = round(price*(1.005 if action == 'BUY' else .995),2)
             if action == 'BUY' and limit*qty > min(config['max_order_inr'],config['max_daily_buy_inr']-spent_today,available):
                 state['attempts'][key]['status'] = 'limit_exceeded'
                 atomic_save(state_path,state)
-                output.append({'symbol':symbol,'action':'SKIP','reason':'Limit price exceeds cap'})
+                output.append({'symbol':symbol,'action':'SKIP','quantity':0,'price':price,'price_type':'current quote','reason':'Limit price exceeds configured budget. '+reason})
                 continue
             order_id = str(kite_sdk.place_limit_order(symbol, action, qty, limit, tag=tag))
             state['attempts'][key].update(status='submitted_unverified',order_id=order_id)
             atomic_save(state_path,state)
             output.append({'symbol':symbol,'action':action,'quantity':qty,'order_id':order_id,
+                           'price':limit,'price_type':'submitted limit','reason':reason,
                            'note':'Check Kite order status and fills; no automatic retry'})
             if action == 'BUY':
                 spent_today += qty*limit

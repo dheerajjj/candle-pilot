@@ -15,6 +15,16 @@ class FakeClient:
 
 
 class DesktopTests(unittest.TestCase):
+    def test_decision_text_distinguishes_simulated_fill_from_previous_close(self):
+        detail,reason=desktop.decision_text({'action':'BUY','quantity':2,'price':150.25,
+            'price_type':'simulated fill','reason':'Breakout'})
+        self.assertIn('2',detail)
+        self.assertIn('150.25 (simulated fill)',detail)
+        self.assertEqual(reason,'Breakout')
+        detail,_=desktop.decision_text({'action':'HOLD','quantity':0,'price':100,
+            'price_type':'previous close'})
+        self.assertIn('previous close',detail)
+
     def test_watchlist_resolved_from_kite_in_paper_mode(self):
         with patch.object(desktop.kite_sdk,'client',return_value=FakeClient()):
             config=desktop.paper_config()

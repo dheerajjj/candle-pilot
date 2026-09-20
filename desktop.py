@@ -12,6 +12,14 @@ import autopilot
 
 ROOT = pathlib.Path(__file__).resolve().parent
 WATCHLIST = ('INFY', 'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK')
+COLORS = {'BUY':'#087a56','SELL':'#b44739','HOLD':'#3e5a83','SKIP':'#73588c'}
+
+
+def decision_text(item):
+    """Keep a missing price distinct from a real zero-priced trade."""
+    price = item.get('price', item.get('paper_price'))
+    price_label = f'₹{price:,.2f} ({item.get("price_type", "quote")})' if price is not None else 'Unavailable'
+    return f'Quantity: {item.get("quantity", 0)}   •   Price: {price_label}', item.get('reason', 'No reason available.')
 
 
 def paper_config():
@@ -72,8 +80,7 @@ class App:
                 raise RuntimeError('Login succeeded. Run again on a weekday between 09:20 and 14:55 IST to make a paper decision.')
             config = paper_config()
             report = autopilot.run(config,ROOT/'autopilot_state.json',now=now)
-            summary = '\n'.join(f"{x['symbol']}: {x['action']}" for x in report)
-            self.root.after(0,lambda:messagebox.showinfo('Paper decision',summary,parent=self.root))
+            self.root.after(0,lambda:self.show_report(report))
             self.root.after(0,lambda:self.status.set('Paper decision recorded. No real orders were sent.'))
         except Exception as exc:
             error=str(exc)
@@ -81,6 +88,42 @@ class App:
             self.root.after(0,lambda:self.status.set('No trade placed. '+error))
         finally:
             self.root.after(0,lambda:self.button.config(state='normal'))
+
+    def show_report(self, report):
+        window = tk.Toplevel(self.root)
+        window.title('Candle Pilot · Paper decisions')
+        window.geometry('780x650')
+        window.configure(bg='#f3f6fb')
+        window.transient(self.root)
+        window.focus_set()
+        tk.Label(window,text='Today’s paper decisions',font=('Segoe UI',20,'bold'),
+                 bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
+        tk.Label(window,text='60 completed daily candles · trend averages · breakout · volume',
+                 font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
+        tk.Label(window,text='No live news, broad market analysis or candlestick pattern model. No real orders.',
+                 font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,12))
+        canvas = tk.Canvas(window,bg='#f3f6fb',highlightthickness=0)
+        scrollbar = tk.Scrollbar(window,command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right',fill='y',pady=(0,18))
+        canvas.pack(side='left',fill='both',expand=True,padx=(22,0),pady=(0,18))
+        cards = tk.Frame(canvas,bg='#f3f6fb')
+        canvas.create_window((0,0),window=cards,anchor='nw',width=728)
+        cards.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
+        for item in report:
+            card = tk.Frame(cards,bg='white',highlightbackground='#dce3ed',highlightthickness=1)
+            card.pack(fill='x',pady=(0,10))
+            header = tk.Frame(card,bg='white')
+            header.pack(fill='x',padx=16,pady=(12,3))
+            tk.Label(header,text=item['symbol'],font=('Segoe UI',13,'bold'),
+                     bg='white',fg='#172b4d').pack(side='left')
+            tk.Label(header,text=item['action'],font=('Segoe UI',11,'bold'),
+                     bg='white',fg=COLORS.get(item['action'],'#52647c')).pack(side='right')
+            detail, reason = decision_text(item)
+            tk.Label(card,text=detail,font=('Segoe UI',10),bg='white',fg='#253b5a',
+                     anchor='w').pack(fill='x',padx=16,pady=(0,3))
+            tk.Label(card,text='Why: '+reason,font=('Segoe UI',10),bg='white',fg='#52647c',
+                     justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,13))
 
     def run(self):
         self.root.mainloop()

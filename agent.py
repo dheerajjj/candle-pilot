@@ -41,8 +41,13 @@ def load_news(path):
 
 def signal(rows, index, news=None):
     """Past-only close/volume trend signal. News veto uses only today's dated score."""
+    return signal_details(rows, index, news)['signal']
+
+
+def signal_details(rows, index, news=None):
+    """The signal and the precise rule that produced it, using completed candles."""
     if index < 60:
-        return 'HOLD'
+        return {'signal':'HOLD','reason':'Fewer than 61 completed daily candles; waiting for enough history.'}
     window = rows[index-59:index+1]
     p = window[-1]['close']
     sma20 = statistics.mean(x['close'] for x in window[-20:])
@@ -51,12 +56,12 @@ def signal(rows, index, news=None):
     vol20 = statistics.mean(x['volume'] for x in window[-21:-1])
     news_score = (news or {}).get(window[-1]['date'], 0)
     if news_score < -0.5:
-        return 'SELL'
+        return {'signal':'SELL','reason':f'Provided news score {news_score:.2f} is below -0.50.'}
     if p < sma20 or sma20 < sma60:
-        return 'SELL'
+        return {'signal':'SELL','reason':f'Trend weakened: prior close ₹{p:,.2f}, 20-day average ₹{sma20:,.2f}, 60-day average ₹{sma60:,.2f}.'}
     if p > prev_high and window[-1]['volume'] > 1.2 * vol20 and news_score >= -0.2:
-        return 'BUY'
-    return 'HOLD'
+        return {'signal':'BUY','reason':f'Prior close ₹{p:,.2f} broke the previous 20-day high ₹{prev_high:,.2f}; volume was {window[-1]["volume"]/vol20:.1f}× its 20-day average.'}
+    return {'signal':'HOLD','reason':f'No breakout or trend exit: prior close ₹{p:,.2f}; 20-day average ₹{sma20:,.2f}; 60-day average ₹{sma60:,.2f}.'}
 
 
 def costs(notional, brokerage=0.0005, slippage=0.001):
