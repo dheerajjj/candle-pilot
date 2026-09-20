@@ -16,7 +16,7 @@ class FakeKite:
     def quote(self,keys): return {'NSE:INFY':{'last_price':101}}
     def holdings(self): return [{'tradingsymbol':'INFY','quantity':1}]
     def orders(self): return []
-    def margins(self,segment): return {'available':{'cash':1000}}
+    def margins(self,segment): return {'net':900,'available':{'cash':1000,'live_balance':950}}
     def place_order(self,**kwargs):
         assert kwargs['order_type']=='LIMIT' and kwargs['product']=='CNC'
         return 'order_123'
@@ -31,7 +31,7 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(kite_sdk.current_quote('INFY')['last_price'],101)
             self.assertEqual(kite_sdk.holdings()[0]['quantity'],1)
             self.assertEqual(kite_sdk.orders(),[])
-            self.assertEqual(kite_sdk.available_cash(),1000)
+            self.assertEqual(kite_sdk.available_cash(),900)
             self.assertEqual(kite_sdk.place_limit_order('INFY','BUY',1,100,tag='CPtest'),'order_123')
             self.assertEqual(kite_sdk.order_history('order_123')[0]['status'],'OPEN')
 

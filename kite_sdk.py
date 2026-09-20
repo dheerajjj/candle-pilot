@@ -33,7 +33,10 @@ def holdings():
 
 
 def available_cash():
-    return float(client().margins('equity')['available']['cash'])
+    data = client().margins('equity')
+    # Raw cash can exceed spendable cash when other margins have been used.
+    return max(0.0,min(float(data['net']),float(data['available']['live_balance']),
+                       float(data['available']['cash'])))
 
 
 def place_limit_order(symbol, side, quantity, price, tag=None):

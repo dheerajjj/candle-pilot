@@ -9,6 +9,7 @@ from tkinter import messagebox, simpledialog
 import credentials
 import kite_sdk
 import autopilot
+import portfolio
 
 ROOT = pathlib.Path(__file__).resolve().parent
 WATCHLIST = ('INFY', 'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK')
@@ -47,7 +48,7 @@ class App:
         tk.Label(self.root,text='One-time API setup, then official Kite login each trading day.',wraplength=480).pack()
         self.status = tk.StringVar(value='Ready. Paper mode only; no real orders.')
         tk.Label(self.root,textvariable=self.status,wraplength=480).pack(pady=20)
-        self.button = tk.Button(self.root,text='Connect Kite and run paper agent',command=self.start)
+        self.button = tk.Button(self.root,text='Connect Kite and see suggestions',command=self.start)
         self.button.pack()
         self.root.after(200,self.setup_if_missing)
 
@@ -79,9 +80,9 @@ class App:
             if now.weekday() >= 5 or not (dt.time(9,20) <= now.time() <= dt.time(14,55)):
                 raise RuntimeError('Login succeeded. Run again on a weekday between 09:20 and 14:55 IST to make a paper decision.')
             config = paper_config()
-            report = autopilot.run(config,ROOT/'autopilot_state.json',now=now)
+            report = portfolio.recommend(config,now=now)
             self.root.after(0,lambda:self.show_report(report))
-            self.root.after(0,lambda:self.status.set('Paper decision recorded. No real orders were sent.'))
+            self.root.after(0,lambda:self.status.set('Suggestions ready. No real orders were sent.'))
         except Exception as exc:
             error=str(exc)
             self.root.after(0,lambda:messagebox.showerror('Candle Pilot',error,parent=self.root))
@@ -91,16 +92,18 @@ class App:
 
     def show_report(self, report):
         window = tk.Toplevel(self.root)
-        window.title('Candle Pilot · Paper decisions')
+        window.title('Candle Pilot · Budgeted suggestions')
         window.geometry('780x650')
         window.configure(bg='#f3f6fb')
         window.transient(self.root)
         window.focus_set()
-        tk.Label(window,text='Today’s paper decisions',font=('Segoe UI',20,'bold'),
+        tk.Label(window,text='Today’s buy suggestions',font=('Segoe UI',20,'bold'),
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
+        tk.Label(window,text=f'Kite available cash: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
+                 font=('Segoe UI',11,'bold'),bg='#f3f6fb',fg='#087a56').pack(anchor='w',padx=23,pady=(4,2))
         tk.Label(window,text='Daily candles · moving averages · breakout · volume · NIFTY 50 · recent headlines',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23)
-        tk.Label(window,text='News headlines are unverified; missing data blocks new buys. No real orders.',
+        tk.Label(window,text='Research suggestions only. Headlines can be inaccurate; no real orders are placed.',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,12))
         canvas = tk.Canvas(window,bg='#f3f6fb',highlightthickness=0)
         scrollbar = tk.Scrollbar(window,command=canvas.yview)
@@ -110,7 +113,7 @@ class App:
         cards = tk.Frame(canvas,bg='#f3f6fb')
         canvas.create_window((0,0),window=cards,anchor='nw',width=728)
         cards.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
-        for item in report:
+        for item in report['items']:
             card = tk.Frame(cards,bg='white',highlightbackground='#dce3ed',highlightthickness=1)
             card.pack(fill='x',pady=(0,10))
             header = tk.Frame(card,bg='white')
