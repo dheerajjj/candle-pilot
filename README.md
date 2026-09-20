@@ -2,6 +2,14 @@
 
 Python 3.11+; uses Zerodha’s official `kiteconnect` SDK and Windows Credential Manager through `keyring`. Install dependencies using `uv sync` or `python -m pip install -r requirements.txt`. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
 
+## One-click Windows setup (recommended)
+
+1. In your [Kite Connect developer app](https://developers.kite.trade/), register the redirect URL **`http://127.0.0.1:8787/callback`** exactly. This is required by Zerodha once for the local browser login. Keep the app's API key and API secret handy. Do not put them into the code or send them in chat.
+2. On Windows, double-click **`CandlePilot.cmd`** in the latest repository download. It installs missing Python dependencies automatically. At first launch, enter your **Kite Connect API key** and **Kite Connect API secret** into the two hidden prompts. They are saved in your Windows Credential Manager. Do not enter your Kite password or TOTP into the app.
+3. On each trading morning, double-click `CandlePilot.cmd` and press **Connect Kite and run paper agent**. Complete the official Zerodha browser login; the local callback finishes without copying tokens. The paper run then scans your current NSE holdings and five default watchlist stocks (INFY, RELIANCE, TCS, HDFCBANK, ICICIBANK) and shows its decisions. Instrument tokens are resolved from Kite automatically. Run between **09:20 and 14:55 IST** on trading weekdays.
+
+No real orders are sent by this launcher. The five default stocks are a small initial watchlist, **not the whole market**, and there is no automatic news analysis yet. Daily user login is still required by Zerodha; the Kite access token expires at 6 a.m. the next day. If you already stored the API key and secret with `credentials.py setup`, the launcher reuses them and prompts only for anything missing. If Windows blocks the local callback, allow localhost access to port 8787 for this app. If `CandlePilot.cmd` cannot find Python, install Python 3.11+ for Windows with the launcher enabled and try again.
+
 ## Try it now with sample data
 
 The included `examples/demo_synthetic.csv` contains **fabricated prices**, only to verify that the program runs. It is not INFY or any real stock; its returns say nothing about investment performance. From the repository folder, run:

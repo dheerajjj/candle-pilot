@@ -103,3 +103,58 @@ def main():
 
 if __name__=='__main__':
     main()
+
+# Desktop login: registered callback must be http://127.0.0.1:8787/callback .
+REDIRECT_URL = 'http://127.0.0.1:8787/callback'
+
+
+def login_browser(timeout=180, port=8787):
+    """Open official Kite login and collect its one-use token on localhost."""
+    import http.server
+    import secrets
+    store = vault()
+    key = store.get_password(SERVICE, 'api_key')
+    secret = store.get_password(SERVICE, 'api_secret')
+    if not key or not secret:
+        raise RuntimeError('API key and secret are missing from Windows Credential Manager')
+    from kiteconnect import KiteConnect
+    nonce = secrets.token_urlsafe(20)
+    result = {}
+
+    class Callback(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            query = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(query.query)
+            if query.path != '/callback' or params.get('cp_state') != [nonce]:
+                self.send_error(403, 'Invalid callback')
+                return
+            result['token'] = params.get('request_token', [None])[0]
+            result['error'] = params.get('error', [None])[0]
+            body = b'<h2>Candle Pilot received your login. You can close this tab.</h2>'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, fmt, *args):
+            pass  # Never log request tokens in callback URLs.
+
+    try:
+        server = http.server.HTTPServer(('127.0.0.1', port), Callback)
+    except OSError as exc:
+        raise RuntimeError('Local login port 8787 is busy. Close other Candle Pilot windows.') from exc
+    try:
+        server.timeout = timeout
+        url = KiteConnect(api_key=key).login_url()
+        url += '&redirect_params=' + urllib.parse.quote('cp_state=' + nonce, safe='')
+        if not webbrowser.open(url):
+            raise RuntimeError('Could not open browser for Kite login')
+        server.handle_request()
+    finally:
+        server.server_close()
+    if not result.get('token'):
+        raise RuntimeError('Kite login timed out or callback failed. Check the registered redirect URL: ' + REDIRECT_URL)
+    store.set_password(SERVICE, 'access_token', exchange_request_token(result['token'], key, secret))
+    return True

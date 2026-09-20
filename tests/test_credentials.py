@@ -43,3 +43,33 @@ class CredentialsTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+class CallbackTests(unittest.TestCase):
+    def test_browser_callback_uses_state_and_hides_token(self):
+        import socket
+        import threading
+        import urllib.parse
+        import urllib.request
+        store=Store()
+        store.set_password(credentials.SERVICE,'api_key','public')
+        store.set_password(credentials.SERVICE,'api_secret','private')
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1',0))
+            port=sock.getsockname()[1]
+        threads=[]
+        def browser(url):
+            params=urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            state=urllib.parse.parse_qs(params['redirect_params'][0])['cp_state'][0]
+            def deliver():
+                q=urllib.parse.urlencode({'cp_state':state,'request_token':'one_time'})
+                with urllib.request.urlopen(f'http://127.0.0.1:{port}/callback?{q}',timeout=2) as response:
+                    assert b'one_time' not in response.read()
+            thread=threading.Thread(target=deliver)
+            threads.append(thread);thread.start()
+            return True
+        with patch.dict(sys.modules,{'kiteconnect':types.SimpleNamespace(KiteConnect=FakeKite)}), \
+             patch.object(credentials,'vault',return_value=store), \
+             patch.object(credentials.webbrowser,'open',side_effect=browser):
+            self.assertTrue(credentials.login_browser(timeout=2,port=port))
+        for thread in threads: thread.join(timeout=2)
+        self.assertEqual(store.get_password(credentials.SERVICE,'access_token'),'short_lived_token')
