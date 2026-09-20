@@ -43,7 +43,12 @@ def recommend(config, now=None, source=None):
             card = {'symbol':symbol,'action':'HOLD','quantity':0,'price':price,
                     'price_type':'current quote','reason':why,'headlines':news.get('articles',[])[:1]}
             if held.get(symbol,0)>0:
-                card['reason']='Already held in Kite; no additional buy suggested. '+why
+                if detail['signal']=='SELL':
+                    card['action']='SELL'
+                    card['quantity']=held[symbol]
+                    card['reason']=f'Exit rule triggered for {held[symbol]} held share(s); review in Kite before acting. '+why
+                else:
+                    card['reason']='Already held in Kite; no additional buy suggested. '+why
             elif detail['signal']!='BUY':
                 card['reason']='Buy conditions did not clear. '+why
             elif not market['up'] or candle['name']=='Bearish engulfing':
@@ -82,6 +87,6 @@ def recommend(config, now=None, source=None):
             card['action']='SKIP'
             card['reason']='Not enough remaining recommendation budget for one share. '+card['reason']
         rows_out.append(card)
-    rows_out.sort(key=lambda item:(item['action']!='BUY', item['symbol']))
+    rows_out.sort(key=lambda item:({'SELL':0,'BUY':1,'HOLD':2,'SKIP':3}.get(item['action'],4),item['symbol']))
     return {'cash':cash,'budget':limit,'proposed':sum(r['quantity']*r['price'] for r in rows_out if r['action']=='BUY'),
             'items':rows_out}

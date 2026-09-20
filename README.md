@@ -1,5 +1,9 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.5.1: review existing holdings
+
+The desktop display includes held NSE equities alongside new buy candidates. If the completed daily-candle exit rule triggers for a holding, the card says **SELL** and shows the quantity currently reported by Kite, its current quote, and the exact rule. SELL is a **review prompt**, not an order or a guarantee that selling is right. Other holdings show HOLD with a reason. Suggested BUY quantities are budgeted separately and are never funded by hypothetical sales. No Kite orders are submitted by the desktop app.
+
 ## Version 0.5: NSE equity discovery and existing holdings
 
 The desktop run loads Kite's NSE equity instrument list and requests quote snapshots in batches of 400. It screens the available cash equities for approximate daily turnover (price × volume of at least ₹2 crore), share price ₹50–₹2,475, and intraday move within ±8%. It then performs deeper historical/market/candlestick/news checks on **up to 12** high-turnover new names, as well as **up to 10** existing NSE equity holdings. It displays counts for the instrument universe, returned quotes, holdings, and new candidates. A new stock need not be on a preset watchlist. Holdings are shown for review but do not receive another BUY suggestion.

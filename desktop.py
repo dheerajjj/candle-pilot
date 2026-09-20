@@ -89,7 +89,7 @@ class App:
         window.configure(bg='#f3f6fb')
         window.transient(self.root)
         window.focus_set()
-        tk.Label(window,text='Today’s buy suggestions',font=('Segoe UI',20,'bold'),
+        tk.Label(window,text='Your holdings and new ideas',font=('Segoe UI',20,'bold'),
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
         tk.Label(window,text=f'Kite available cash: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
                  font=('Segoe UI',11,'bold'),bg='#f3f6fb',fg='#087a56').pack(anchor='w',padx=23,pady=(4,2))
