@@ -104,9 +104,10 @@ def simulate(rows, news=None, initial=100000, allocation=0.1, fee=0.0005, slippa
 
 
 def kite_request(method, path, data=None):
-    key, token = os.getenv('KITE_API_KEY'), os.getenv('KITE_ACCESS_TOKEN')
+    from credentials import get_value
+    key, token = get_value('api_key'), get_value('access_token')
     if not key or not token:
-        raise RuntimeError('Set KITE_API_KEY and KITE_ACCESS_TOKEN from official Kite login flow')
+        raise RuntimeError('Run python credentials.py setup and python credentials.py login first')
     body = urllib.parse.urlencode(data).encode() if data else None
     req = urllib.request.Request('https://api.kite.trade'+path, data=body, method=method,
         headers={'X-Kite-Version':'3','Authorization':f'token {key}:{token}',
