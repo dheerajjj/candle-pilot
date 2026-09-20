@@ -1,0 +1,6 @@
+{
+  "mode": "paper",
+  "stocks": [{"symbol": "INFY", "instrument_token": 408065}],
+  "max_order_inr": 5000,
+  "max_daily_buy_inr": 5000
+}
