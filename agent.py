@@ -7,9 +7,6 @@ import math
 import os
 import pathlib
 import statistics
-import urllib.parse
-import urllib.request
-from dataclasses import dataclass
 
 ROOT = pathlib.Path(__file__).resolve().parent
 
@@ -103,28 +100,16 @@ def simulate(rows, news=None, initial=100000, allocation=0.1, fee=0.0005, slippa
                 trades=trades, equity_curve=equity, open_units=units)
 
 
-def kite_request(method, path, data=None):
-    from credentials import get_value
-    key, token = get_value('api_key'), get_value('access_token')
-    if not key or not token:
-        raise RuntimeError('Run python credentials.py setup and python credentials.py login first')
-    body = urllib.parse.urlencode(data).encode() if data else None
-    req = urllib.request.Request('https://api.kite.trade'+path, data=body, method=method,
-        headers={'X-Kite-Version':'3','Authorization':f'token {key}:{token}',
-                 'Content-Type':'application/x-www-form-urlencoded'})
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.load(resp)
-
 
 def fetch_kite(symbol, token, start, end, output):
     """Fetch daily historical candles by instrument token, not ticker string."""
-    query = urllib.parse.urlencode({'from':start,'to':end})
-    candles = kite_request('GET', f'/instruments/historical/{int(token)}/day?{query}')['data']['candles']
+    import kite_sdk
+    candles = kite_sdk.daily_candles(token, start, end)
     with open(output, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['date','open','high','low','close','volume'])
         for c in candles:
-            writer.writerow([c[0][:10],c[1],c[2],c[3],c[4],c[5]])
+            writer.writerow([str(c['date'])[:10], c['open'], c['high'], c['low'], c['close'], c['volume']])
     return len(candles)
 
 
@@ -184,10 +169,9 @@ def live_order(symbol, side, quantity, limit_price, confirmation):
         raise ValueError('Confirmation must match SIDE:SYMBOL:QTY:LIMIT_PRICE exactly')
     if not symbol.isascii() or not symbol.replace('-','').isalnum():
         raise ValueError('Invalid symbol')
-    response = kite_request('POST','/orders/regular', dict(tradingsymbol=symbol, exchange='NSE',
-        transaction_type=side, order_type='LIMIT', quantity=quantity, product='CNC', validity='DAY', price=limit_price))
-    order_id = str(response['data']['order_id'])
-    history = kite_request('GET',f'/orders/{urllib.parse.quote(order_id)}')
+    import kite_sdk
+    order_id = str(kite_sdk.place_limit_order(symbol, side, quantity, limit_price))
+    history = kite_sdk.order_history(order_id)
     return dict(order_id=order_id, order_history=history, note='Inspect latest order status; submission alone is not execution')
 
 

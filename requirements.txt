@@ -1,1 +1,2 @@
 keyring>=25,<27
+kiteconnect>=5,<6

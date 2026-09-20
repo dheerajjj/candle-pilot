@@ -40,7 +40,7 @@ class AutopilotTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     autopilot.run(config,path,self.now,self.broker)
             with patch.dict('os.environ',{'ENABLE_LIVE_TRADING':'YES'}):
-                with patch.object(autopilot,'kite_request',side_effect=TimeoutError('ambiguous')):
+                with patch.object(autopilot.kite_sdk,'place_limit_order',side_effect=TimeoutError('ambiguous')):
                     with self.assertRaises(TimeoutError):
                         autopilot.run(config,path,self.now,self.broker)
                 self.assertEqual(autopilot.run(config,path,self.now,self.broker)[0]['action'],'SKIP')

@@ -5,12 +5,8 @@ No account password, TOTP seed or token is written to the project directory.
 """
 import argparse
 import getpass
-import hashlib
-import json
 import os
-import sys
 import urllib.parse
-import urllib.request
 import webbrowser
 
 SERVICE = 'CandlePilot.Kite'
@@ -48,18 +44,15 @@ def setup():
     print('API key and secret stored in Windows Credential Manager. Kite login password/TOTP not stored.')
 
 
-def exchange_request_token(request_token, api_key, api_secret, opener=urllib.request.urlopen):
-    checksum = hashlib.sha256((api_key + request_token + api_secret).encode('utf-8')).hexdigest()
-    data = urllib.parse.urlencode(dict(api_key=api_key, request_token=request_token,
-                                        checksum=checksum)).encode('ascii')
-    req = urllib.request.Request('https://api.kite.trade/session/token', data=data,
-                                 headers={'X-Kite-Version': '3'}, method='POST')
-    with opener(req, timeout=15) as response:
-        payload = json.load(response)
-    token = payload.get('data', {}).get('access_token')
-    if payload.get('status') != 'success' or not token:
+def exchange_request_token(request_token, api_key, api_secret):
+    from kiteconnect import KiteConnect
+    kite = KiteConnect(api_key=api_key)
+    data = kite.generate_session(request_token, api_secret=api_secret)
+    token = data.get('access_token')
+    if not token:
         raise RuntimeError('Kite did not provide an access token')
     return token
+
 
 
 def login():
@@ -68,7 +61,8 @@ def login():
     secret = store.get_password(SERVICE, 'api_secret')
     if not key or not secret:
         raise RuntimeError('Run python credentials.py setup first')
-    url = 'https://kite.zerodha.com/connect/login?v=3&' + urllib.parse.urlencode({'api_key':key})
+    from kiteconnect import KiteConnect
+    url = KiteConnect(api_key=key).login_url()
     print('Opening the official Kite login page in your browser.')
     webbrowser.open(url)
     print('After official Kite login, copy the FULL redirect URL from your browser address bar.')

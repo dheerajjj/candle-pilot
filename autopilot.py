@@ -6,9 +6,9 @@ import json
 import math
 import os
 import pathlib
-import urllib.parse
 
-from agent import kite_request, signal
+from agent import signal
+import kite_sdk
 
 IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
 STATE = pathlib.Path('autopilot_state.json')
@@ -40,18 +40,16 @@ def history(token, now):
     # Exclude today's partial candle. Kite timestamps use India local dates.
     end = now.date() - dt.timedelta(days=1)
     start = end - dt.timedelta(days=180)
-    q = urllib.parse.urlencode({'from': str(start), 'to': str(end)})
-    raw = kite_request('GET', f'/instruments/historical/{token}/day?{q}')['data']['candles']
-    rows = [dict(date=dt.date.fromisoformat(c[0][:10]), high=float(c[2]),
-                 low=float(c[3]), close=float(c[4]), volume=float(c[5])) for c in raw]
+    raw = kite_sdk.daily_candles(token, start, end)
+    rows = [dict(date=dt.date.fromisoformat(str(c['date'])[:10]), high=float(c['high']),
+                 low=float(c['low']), close=float(c['close']), volume=float(c['volume'])) for c in raw]
     if len(rows) < 65 or (end - rows[-1]['date']).days > 4:
         raise RuntimeError('Historical candles insufficient or stale; no order placed')
     return rows
 
 
 def quote(symbol):
-    q = urllib.parse.urlencode({'i': 'NSE:'+symbol})
-    item = kite_request('GET','/quote?'+q)['data']['NSE:'+symbol]
+    item = kite_sdk.current_quote(symbol)
     last = float(item['last_price'])
     if last <= 0:
         raise RuntimeError('Invalid market quote')
@@ -59,16 +57,15 @@ def quote(symbol):
 
 
 def existing_orders():
-    return kite_request('GET','/orders')['data']
+    return kite_sdk.orders()
 
 
 def holdings():
-    return {x['tradingsymbol']: int(x['quantity']) for x in kite_request('GET','/portfolio/holdings')['data']}
+    return {x['tradingsymbol']: int(x['quantity']) for x in kite_sdk.holdings()}
 
 
 def funds():
-    item = kite_request('GET','/user/margins/equity')['data']
-    return float(item['available']['cash'])
+    return kite_sdk.available_cash()
 
 
 def run(config, state_path=STATE, now=None, broker=None):
@@ -142,10 +139,7 @@ def run(config, state_path=STATE, now=None, broker=None):
                 atomic_save(state_path,state)
                 output.append({'symbol':symbol,'action':'SKIP','reason':'Limit price exceeds cap'})
                 continue
-            order = kite_request('POST','/orders/regular',dict(tradingsymbol=symbol, exchange='NSE',
-                transaction_type=action, order_type='LIMIT', quantity=qty, product='CNC',
-                validity='DAY',price=limit,tag=tag))
-            order_id = str(order['data']['order_id'])
+            order_id = str(kite_sdk.place_limit_order(symbol, action, qty, limit, tag=tag))
             state['attempts'][key].update(status='submitted_unverified',order_id=order_id)
             atomic_save(state_path,state)
             output.append({'symbol':symbol,'action':action,'quantity':qty,'order_id':order_id,

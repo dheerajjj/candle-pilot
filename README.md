@@ -1,6 +1,6 @@
 # Candle Pilot — Personal Kite stock research agent
 
-Python 3.11+; install `requirements.txt` for secure Windows credential storage. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
+Python 3.11+; uses Zerodha’s official `kiteconnect` SDK and Windows Credential Manager through `keyring`. Install dependencies using `uv sync` or `python -m pip install -r requirements.txt`. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
 
 ## Try it now with sample data
 
@@ -30,7 +30,7 @@ Paper command processes the final row of a daily CSV once. Run again with anothe
 
 ## Kite market data
 
-Follow [Kite Connect's official login flow](https://kite.trade/docs/connect/v3/user/) to obtain a session access token. Use `python credentials.py setup` and `python credentials.py login` below to keep credentials in Windows Credential Manager (never commit them). Find the *instrument token* from [Kite's instrument list](https://kite.trade/docs/connect/v3/market-quotes/#instruments); a symbol alone is not the token.
+Follow [Kite Connect's official login flow](https://kite.trade/docs/connect/v3/user/) to obtain a session access token. Candle Pilot uses `KiteConnect.login_url()` and `generate_session()` from Zerodha’s Python SDK. Use `python credentials.py setup` and `python credentials.py login` below to keep credentials in Windows Credential Manager (never commit them). Find the *instrument token* from [Kite's instrument list](https://kite.trade/docs/connect/v3/market-quotes/#instruments); a symbol alone is not the token.
 
 ```bash
 python agent.py fetch --symbol INFY --instrument-token YOUR_TOKEN --start 2024-01-01 --end 2026-09-19 --output daily.csv
@@ -65,8 +65,12 @@ Live mode is an **experimental execution path** that requires changing the local
 **Do not use “Add a Windows Credential” by hand.** Candle Pilot creates its own entry safely through Python's `keyring` library. Use native Windows Python from Git Bash or PowerShell; WSL is not supported for this setup.
 
 1. Create a Kite Connect app in [Zerodha's developer portal](https://developers.kite.trade/), with a redirect URL that you control (for example, `http://127.0.0.1:8787/callback`). Keep the app's **API key** and **API secret** ready; these are issued by Zerodha. The callback URL may show a connection error after login; the address bar still contains the short-lived `request_token` to copy. Do not share that URL. 
-2. In your `candle-pilot-main` folder run `python -m pip install -r requirements.txt`, then `python credentials.py setup`. At the hidden prompts, paste the **Kite Connect API key** and **API secret**, respectively. The program creates the `CandlePilot.Kite` entry in your Windows Credential Manager. Do **not** enter your Kite account password or TOTP here.
+2. In your `candle-pilot-main` folder run `python -m pip install -r requirements.txt` (or, if `uv` is installed, `uv sync` and then prefix the following commands with `uv run`), then `python credentials.py setup`. At the hidden prompts, paste the **Kite Connect API key** and **API secret**, respectively. The program creates the `CandlePilot.Kite` entry in your Windows Credential Manager. Do **not** enter your Kite account password or TOTP here.
 3. Each trading day, run `python credentials.py login`. It opens Kite's official login page, where you log in yourself. Paste the full browser redirect URL into the hidden prompt. The program exchanges its one-time request token and saves the resulting access token in Windows Credential Manager. Run `python credentials.py status` to see stored/missing fields (no secret values displayed).
 4. Run `python autopilot.py --config autopilot_config.json` after login, or schedule that command for 10:00 a.m. IST. The scheduled task must run as the **same Windows user** who ran setup/login. If the token has expired, the run stops. It never stores your Kite password or TOTP and does not circumvent Zerodha's required daily login.
 
 Run `python credentials.py delete` to remove Candle Pilot's stored credentials. If you previously pasted any secret into GitHub, chat or an exposed file, revoke/rotate it via Zerodha. Avoid screenshots showing the redirect URL or token. [Kite documents the official login flow and next-day 6 a.m. session expiry](https://kite.trade/docs/connect/v3/user/).
+
+## Kite SDK
+
+All live Kite API calls now use Zerodha’s official [pykiteconnect SDK](https://github.com/zerodha/pykiteconnect) via `kite_sdk.py`; authentication uses `KiteConnect.login_url()` and `generate_session()`. The project declares dependencies in `pyproject.toml` for `uv` and `requirements.txt` for ordinary Python. `KiteTicker` live streaming is not needed for this once-per-day strategy; the agent uses historical daily candles and a quote. The SDK change does not validate the strategy or make live execution safe by itself.
