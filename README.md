@@ -1,6 +1,6 @@
 # Candle Pilot — Personal Kite stock research agent
 
-Python 3.11+; standard library only. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
+Python 3.11+; install `requirements.txt` for secure Windows credential storage. Research and paper trading work with CSV data; Kite access needs your own official Kite Connect app and daily authenticated access token. This is a starter strategy, **not a proven profitable system**. No forecast or return guarantee is possible.
 
 ## Try it now with sample data
 
@@ -30,7 +30,7 @@ Paper command processes the final row of a daily CSV once. Run again with anothe
 
 ## Kite market data
 
-Follow [Kite Connect's official login flow](https://kite.trade/docs/connect/v3/user/) to obtain a session access token. Set `KITE_API_KEY` and `KITE_ACCESS_TOKEN` in your shell or secret manager (never commit them). Find the *instrument token* from [Kite's instrument list](https://kite.trade/docs/connect/v3/market-quotes/#instruments); a symbol alone is not the token.
+Follow [Kite Connect's official login flow](https://kite.trade/docs/connect/v3/user/) to obtain a session access token. Use `python credentials.py setup` and `python credentials.py login` below to keep credentials in Windows Credential Manager (never commit them). Find the *instrument token* from [Kite's instrument list](https://kite.trade/docs/connect/v3/market-quotes/#instruments); a symbol alone is not the token.
 
 ```bash
 python agent.py fetch --symbol INFY --instrument-token YOUR_TOKEN --start 2024-01-01 --end 2026-09-19 --output daily.csv
@@ -40,7 +40,7 @@ Kite may impose historical data range and request limits; fetch smaller ranges a
 
 ## Live order gate (optional)
 
-Verify your current broker and SEBI algo/API requirements before enabling live trading. The CLI has **no unattended trading scheduler**, no live market-wide news feed, and does not auto convert signals to orders. It supports only manually confirmed NSE equity CNC **limit** orders up to 10 shares and ₹5,000 per order. An order can remain open or be rejected; inspect the returned history and Kite before taking any further action. Do not retry blindly on a timeout, as a submitted order may still exist.
+Verify your current broker and SEBI algo/API requirements before enabling live trading. The manual `agent.py order` command has no scheduling or automatic signals; the separate `autopilot.py` runner handles scheduled decisions. Neither has a live market-wide news feed. It supports only manually confirmed NSE equity CNC **limit** orders up to 10 shares and ₹5,000 per order. An order can remain open or be rejected; inspect the returned history and Kite before taking any further action. Do not retry blindly on a timeout, as a submitted order may still exist.
 
 ```bash
 export ENABLE_LIVE_TRADING=YES
@@ -53,9 +53,20 @@ Before any unattended live system, add authenticated position reconciliation, st
 
 `autopilot.py` fetches recent **real** Kite daily candles for your selected NSE stocks, calculates yesterday's signal, checks a current quote, and makes a daily decision. It can place CNC limit orders when explicitly configured for live mode. It does not read market-wide news, predict returns, or guarantee profits. Start in paper mode to observe it first.
 
-1. Create a [Kite Connect app](https://kite.trade/docs/connect/v3/) and obtain a valid daily access token using Zerodha's **official** login flow. Put `KITE_API_KEY` and `KITE_ACCESS_TOKEN` in local environment variables or a secret manager. Never put them in this public repository or send them in chat.
+1. Create a [Kite Connect app](https://kite.trade/docs/connect/v3/) and set up Windows Credential Manager using the exact steps below. Log in via Zerodha's **official** login flow each trading day. Never put tokens in this public repository or send them in chat.
 2. Copy `autopilot_config.example.json` to `autopilot_config.json`; verify the instrument token for each selected symbol from Kite's instrument list. Set your own risk limits, at most ₹5,000 per order and ₹5,000 bought per day in this version. The default is `paper`.
 3. Run `python autopilot.py --config autopilot_config.json` once during market hours. The output says what it decided; it records decisions in `autopilot_state.json` to avoid submitting a duplicate on the same day.
 4. To run automatically on Windows, create a **daily 10:00 a.m. IST task** in Windows Task Scheduler that starts `python` with arguments `autopilot.py --config autopilot_config.json` and sets **Start in** to your project folder. Your Kite session token must be valid that day; [Kite documents expiry at 6 a.m. the next day](https://kite.trade/docs/connect/v3/user/). Scheduling does not bypass required Zerodha authentication.
 
 Live mode is an **experimental execution path** that requires changing the local config mode to `live` and setting `ENABLE_LIVE_TRADING=YES`. It checks Kite holdings, available cash, existing tagged orders and daily caps, but this is not a production trading service: there is no live news feed, complete exchange-holiday calendar, corporate-action handling, full multi-day order reconciliation, or automatic token renewal. Do not enable live trading until the strategy is validated on real data, broker/API requirements are confirmed, and the remaining safeguards are built and reviewed. If a Kite order request times out after submission, the program will not retry it; inspect Kite and reconcile the attempt manually.
+
+## Windows credentials: exact setup
+
+**Do not use “Add a Windows Credential” by hand.** Candle Pilot creates its own entry safely through Python's `keyring` library. Use native Windows Python from Git Bash or PowerShell; WSL is not supported for this setup.
+
+1. Create a Kite Connect app in [Zerodha's developer portal](https://developers.kite.trade/), with a redirect URL that you control (for example, `http://127.0.0.1:8787/callback`). Keep the app's **API key** and **API secret** ready; these are issued by Zerodha. The callback URL may show a connection error after login; the address bar still contains the short-lived `request_token` to copy. Do not share that URL. 
+2. In your `candle-pilot-main` folder run `python -m pip install -r requirements.txt`, then `python credentials.py setup`. At the hidden prompts, paste the **Kite Connect API key** and **API secret**, respectively. The program creates the `CandlePilot.Kite` entry in your Windows Credential Manager. Do **not** enter your Kite account password or TOTP here.
+3. Each trading day, run `python credentials.py login`. It opens Kite's official login page, where you log in yourself. Paste the full browser redirect URL into the hidden prompt. The program exchanges its one-time request token and saves the resulting access token in Windows Credential Manager. Run `python credentials.py status` to see stored/missing fields (no secret values displayed).
+4. Run `python autopilot.py --config autopilot_config.json` after login, or schedule that command for 10:00 a.m. IST. The scheduled task must run as the **same Windows user** who ran setup/login. If the token has expired, the run stops. It never stores your Kite password or TOTP and does not circumvent Zerodha's required daily login.
+
+Run `python credentials.py delete` to remove Candle Pilot's stored credentials. If you previously pasted any secret into GitHub, chat or an exposed file, revoke/rotate it via Zerodha. Avoid screenshots showing the redirect URL or token. [Kite documents the official login flow and next-day 6 a.m. session expiry](https://kite.trade/docs/connect/v3/user/).
