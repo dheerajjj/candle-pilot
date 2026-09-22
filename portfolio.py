@@ -15,13 +15,23 @@ def recommend(config, now=None, source=None):
     now = now.astimezone(autopilot.IST)
     if now.weekday() >= 5 or not (dt.time(9,20) <= now.time() <= dt.time(14,55)):
         raise ValueError('Run on a weekday during market hours, 09:20–14:55 IST')
-    source = source or {'cash':kite_sdk.available_cash,'holdings':kite_sdk.holdings,
+    source = source or {'funds':kite_sdk.funds_details,'holdings':kite_sdk.holdings,
         'market':context.market,'history':autopilot.history,'quote':autopilot.quote,
         'news':context.headlines,'intraday':intraday.assess}
-    cash = float(source['cash']())
+    if 'funds' in source:
+        funds = dict(source['funds']())
+        cash = float(funds['available'])
+    else:
+        cash = float(source['cash']())
+        funds = {'available':cash,'net':cash,'raw_cash':cash,'opening_balance':cash,
+                 'intraday_payin':0.0,'collateral':0.0,'utilised_debits':0.0}
     if not math.isfinite(cash) or cash < 0:
         raise ValueError('Kite available funds unavailable; no recommendations made')
-    held = {x['tradingsymbol']:int(x['quantity']) for x in source['holdings']() if x.get('exchange')=='NSE'}
+    holding_rows = source['holdings']()
+    held = {x['tradingsymbol']:int(x['quantity']) for x in holding_rows if x.get('exchange')=='NSE'}
+    holdings_value = sum(float(x.get('last_price') or x.get('average_price') or 0)*int(x.get('quantity') or 0)
+                         for x in holding_rows if x.get('exchange')=='NSE')
+    holdings_pnl = sum(float(x.get('pnl') or 0) for x in holding_rows if x.get('exchange')=='NSE')
     market = source['market'](now)
     if 'up' not in market or 'reason' not in market:
         raise ValueError('Market data unavailable; no recommendations made')
@@ -95,5 +105,6 @@ def recommend(config, now=None, source=None):
             card['reason']='Not enough remaining recommendation budget for one share. '+card['reason']
         rows_out.append(card)
     rows_out.sort(key=lambda item:({'SELL':0,'BUY':1,'HOLD':2,'SKIP':3}.get(item['action'],4),item['symbol']))
-    return {'cash':cash,'budget':limit,'proposed':sum(r['quantity']*r['price'] for r in rows_out if r['action']=='BUY'),
+    return {'cash':cash,'funds':funds,'holdings_value':holdings_value,'holdings_pnl':holdings_pnl,
+            'budget':limit,'proposed':sum(r['quantity']*r['price'] for r in rows_out if r['action']=='BUY'),
             'items':rows_out}

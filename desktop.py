@@ -94,8 +94,14 @@ class App:
         window.focus_set()
         tk.Label(window,text='Your holdings and new ideas',font=('Segoe UI',20,'bold'),
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
-        tk.Label(window,text=f'Kite available cash: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
+        tk.Label(window,text=f'Kite current available balance: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
                  font=('Segoe UI',11,'bold'),bg='#f3f6fb',fg='#087a56').pack(anchor='w',padx=23,pady=(4,2))
+        funds=report.get('funds',{})
+        tk.Label(window,text=(f'Opening balance: ₹{funds.get("opening_balance",0):,.2f}  •  Raw cash: ₹{funds.get("raw_cash",0):,.2f}  •  '
+                              f'Utilised debits: ₹{funds.get("utilised_debits",0):,.2f}  •  Collateral: ₹{funds.get("collateral",0):,.2f}'),
+                 font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,2))
+        tk.Label(window,text=f'NSE holdings value: ₹{report.get("holdings_value",0):,.2f}  •  Holdings P&L: ₹{report.get("holdings_pnl",0):,.2f}',
+                 font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(0,2))
         screen=report.get('screen',{})
         tk.Label(window,text=f'NSE equities: {screen.get("universe",0):,}  •  Quoted: {screen.get("quoted",0):,}  •  Holdings: {screen.get("held_count",0)}  •  New candidates: {screen.get("new_count",0)}',
                  font=('Segoe UI',10),bg='#f3f6fb',fg='#52647c').pack(anchor='w',padx=23,pady=(2,2))

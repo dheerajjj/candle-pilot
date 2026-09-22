@@ -36,11 +36,29 @@ def holdings():
     return client().holdings()
 
 
-def available_cash():
+def funds_details():
+    """Return normalized equity funds without confusing raw cash with current balance."""
     data = client().margins('equity')
-    # Raw cash can exceed spendable cash when other margins have been used.
-    return max(0.0,min(float(data['net']),float(data['available']['live_balance']),
-                       float(data['available']['cash'])))
+    available = data.get('available') or {}
+    utilised = data.get('utilised') or {}
+    number = lambda value: float(value or 0)
+    # Kite documents live_balance as the current available balance. available.cash
+    # is the raw cash balance and must not be used as a lower bound: it can differ
+    # from live_balance after debits, pay-ins, or other account adjustments.
+    return {
+        'enabled': bool(data.get('enabled', True)),
+        'available': max(0.0, number(available.get('live_balance'))),
+        'net': number(data.get('net')),
+        'raw_cash': number(available.get('cash')),
+        'opening_balance': number(available.get('opening_balance')),
+        'intraday_payin': number(available.get('intraday_payin')),
+        'collateral': number(available.get('collateral')),
+        'utilised_debits': number(utilised.get('debits')),
+    }
+
+
+def available_cash():
+    return funds_details()['available']
 
 
 def place_limit_order(symbol, side, quantity, price, tag=None):

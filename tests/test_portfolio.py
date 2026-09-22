@@ -30,6 +30,24 @@ class PortfolioTests(unittest.TestCase):
         self.assertEqual(report['cash'],10000)
         self.assertEqual(report['items'][0]['company'],'Infosys Limited')
 
+    def test_funds_and_holding_totals_are_reported(self):
+        now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
+        bars=[dict(date=now.date()-dt.timedelta(days=80-i),open=100,high=102,
+                   low=99,close=100,volume=100) for i in range(80)]
+        source={'funds':lambda:{'available':8000,'net':8500,'raw_cash':10000,
+                               'opening_balance':10000,'intraday_payin':0,'collateral':500,
+                               'utilised_debits':2000},
+                'holdings':lambda:[{'exchange':'NSE','tradingsymbol':'INFY','quantity':2,
+                                    'last_price':1500,'pnl':200}],
+                'market':lambda now:{'up':True,'reason':'Index up'},
+                'history':lambda token,now:bars,'quote':lambda symbol:1500,
+                'intraday':lambda token,now,price:{'up':False,'reason':'Not needed'},
+                'news':lambda company,now:{'articles':[],'reason':'Not needed'}}
+        report=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
+        self.assertEqual(report['cash'],8000)
+        self.assertEqual(report['holdings_value'],3000)
+        self.assertEqual(report['holdings_pnl'],200)
+
     def test_news_outage_disables_a_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
         bars=[]
