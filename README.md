@@ -1,10 +1,18 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.9: decision tabs, broader BUY qualification and resilient news
+
+The dashboard now has clickable **ALL, BUY, SELL, HOLD and WATCH** tabs with live counts. It opens on BUY when at least one purchase idea qualifies. BUY cards show the suggested quantity, indicative price and estimated cost; SELL and HOLD contain owned shares only; WATCH contains new shares that are not current purchase suggestions.
+
+New BUY ideas can now qualify through either a confirmed breakout or a strong completed 20/60-day uptrend. A bearish engulfing candle, risk-related headline, large gap or failed completed five-minute confirmation still blocks a BUY. At most the three strongest qualifying opportunities are sized from current Kite funds under the existing risk caps. A market below its 50-day average reduces ranking rather than automatically eliminating every otherwise-strong stock.
+
+Headline retrieval now uses a verified certificate bundle, retries GDELT after a transient failure, and falls back to Google News RSS. If both providers remain unavailable, the card clearly shows reduced news confidence; an outage no longer converts the whole dashboard to WATCH. Headline matching remains an imperfect research input, not verified sentiment.
+
 ## Version 0.8: correct holdings, visible news and clearer funds-based ideas
 
 The result window now has two explicit sections: **Your Kite holdings** and **New market opportunities**. `HOLD` is used only for a positive-quantity NSE holding returned by Kite, and its actual owned quantity is shown. New stocks that do not qualify for purchase are labelled `WATCH`, never `HOLD`. The previous ten-holding research limit has been removed, so every positive-quantity NSE holding found in the current Kite instrument list is included.
 
-Every displayed assessment now performs a headline lookup and shows its news status plus up to two recent matching headlines. A news outage or lack of a matching current headline is visible and cannot silently pass the BUY gate. Qualified BUY cards show the suggested quantity and estimated cost, sized from the current Kite available balance under the existing safety limits: at most half the available balance, ₹5,000 total, ₹2,500 per stock and ten shares. If no stock clears all technical, market, completed five-minute candle and news checks, the screen clearly says that no BUY qualified and leaves funds unallocated. Candle Pilot does not force a trade merely because cash is available.
+Every displayed assessment performs a headline lookup and shows its news status plus up to two recent matching headlines. Qualified BUY cards show the suggested quantity and estimated cost, sized from the current Kite available balance under the existing safety limits: at most half the available balance, ₹5,000 total, ₹2,500 per stock and ten shares. If no stock clears the applicable checks, the screen clearly says that no BUY qualified and leaves funds unallocated. Candle Pilot does not force a trade merely because cash is available.
 
 ## Version 0.7: live prices while the results window is open
 

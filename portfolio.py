@@ -53,10 +53,13 @@ def recommend(config, now=None, source=None):
             except Exception as exc:
                 news = {'articles':[],'flagged':[],
                         'reason':'News unavailable: '+str(exc),'unavailable':True}
-            eligible = (not owned and detail['signal']=='BUY' and market['up']
-                        and candle['name']!='Bearish engulfing' and abs(price/bars[-1]['close']-1)<=.12
-                        and bool(news.get('articles')) and not news.get('flagged')
-                        and not news.get('unavailable'))
+            closes=[float(x['close']) for x in bars]
+            sma20=statistics.mean(closes[-20:])
+            sma60=statistics.mean(closes[-60:])
+            trend_up=closes[-1]>sma20>sma60
+            eligible = (not owned and (detail['signal']=='BUY' or trend_up)
+                        and candle['name']!='Bearish engulfing' and abs(price/closes[-1]-1)<=.12
+                        and not news.get('flagged'))
             minutes=(source['intraday'](stock['instrument_token'],now,price) if eligible else
                      {'up':False,'reason':'Not required because earlier buy checks did not all clear.'})
             why = (f'{detail["reason"]} Candle: {candle["name"]}. '
@@ -67,7 +70,8 @@ def recommend(config, now=None, source=None):
                     'price_type':'current quote','reason':why,
                     'technical':detail['reason'],'candle':candle['name'],
                     'market':market['reason'],'intraday':minutes['reason'],
-                    'news_status':news['reason'],'headlines':news.get('articles',[])[:2]}
+                    'news_status':news['reason'],'headlines':news.get('articles',[])[:2],
+                    'confidence':'Reduced—news unavailable' if news.get('unavailable') else 'Standard'}
             if owned:
                 if detail['signal']=='SELL':
                     card['action']='SELL'
@@ -75,14 +79,14 @@ def recommend(config, now=None, source=None):
                     card['reason']=f'Exit rule triggered for {held[symbol]} held share(s); review in Kite before acting. '+why
                 else:
                     card['reason']=f'You own {held[symbol]} share(s). Hold/review; no additional buy suggested. '+why
-            elif detail['signal']!='BUY':
+            elif detail['signal']!='BUY' and not trend_up:
                 card['reason']='Watch only—buy conditions did not clear. '+why
-            elif not market['up'] or candle['name']=='Bearish engulfing':
-                card['reason']='Watch only—market or candle confirmation did not clear. '+why
+            elif candle['name']=='Bearish engulfing':
+                card['reason']='Watch only—bearish candle confirmation blocked the buy. '+why
             elif abs(price/bars[-1]['close']-1)>.12:
                 card['reason']='Watch only—price moved more than 12% from last close. '+why
-            elif not news.get('articles') or news.get('flagged') or news.get('unavailable'):
-                card['reason']='Watch only—news confirmation is missing or needs review. '+why
+            elif news.get('flagged'):
+                card['reason']='Watch only—a risk-related headline needs human review. '+why
             elif not minutes['up']:
                 card['reason']='Watch only—completed 5-minute candle confirmation did not clear. '+why
             else:
@@ -90,6 +94,10 @@ def recommend(config, now=None, source=None):
                 prior_high=max(x['high'] for x in bars[-21:-1])
                 avg_volume=statistics.mean(x['volume'] for x in bars[-21:-1])
                 score=(recent['close']/prior_high-1)+(recent['volume']/avg_volume-1)*.02
+                score += .02 if market['up'] else -.01
+                score += .01 if news.get('articles') else -.005
+                card['reason']=(('Strong 20/60-day uptrend' if detail['signal']!='BUY' else 'Breakout signal')+
+                                '; completed intraday confirmation passed. '+why)
                 candidates.append((score,card))
                 continue
             rows_out.append(card)
@@ -102,7 +110,12 @@ def recommend(config, now=None, source=None):
     # Keep half the account cash untouched, cap total at ₹5k and each name at ₹2.5k.
     limit=min(cash*.5,5000.0)
     remaining=limit
-    for _,card in sorted(candidates,key=lambda item:item[0],reverse=True):
+    for rank,(_,card) in enumerate(sorted(candidates,key=lambda item:item[0],reverse=True)):
+        if rank>=3:
+            card['action']='WATCH'
+            card['reason']='Watch only—ranked below the three strongest qualified opportunities. '+card['reason']
+            rows_out.append(card)
+            continue
         price=card['price']
         budget=min(2500.0,remaining)
         qty=min(10,math.floor(budget/(price*1.01)))

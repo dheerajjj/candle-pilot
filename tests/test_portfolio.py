@@ -48,7 +48,7 @@ class PortfolioTests(unittest.TestCase):
         self.assertEqual(report['holdings_value'],3000)
         self.assertEqual(report['holdings_pnl'],200)
 
-    def test_news_outage_disables_a_buy(self):
+    def test_news_outage_reduces_confidence_without_disabling_technical_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
         bars=[]
         for i in range(80):
@@ -61,9 +61,10 @@ class PortfolioTests(unittest.TestCase):
                 'intraday':lambda token,now,price:{'up':True,'reason':'Intraday clear'},
                 'news':lambda company,now:(_ for _ in ()).throw(TimeoutError('offline'))}
         result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
-        self.assertEqual(result['proposed'],0)
-        self.assertEqual(result['items'][0]['action'],'WATCH')
+        self.assertGreater(result['proposed'],0)
+        self.assertEqual(result['items'][0]['action'],'BUY')
         self.assertIn('News unavailable',result['items'][0]['news_status'])
+        self.assertIn('Reduced',result['items'][0]['confidence'])
 
     def test_missing_intraday_candles_withhold_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
@@ -113,6 +114,24 @@ class PortfolioTests(unittest.TestCase):
         new=next(x for x in report['items'] if x['symbol']=='NEWCO')
         self.assertEqual((owned['action'],owned['quantity'],owned['owned']),('HOLD',3,True))
         self.assertEqual((new['action'],new['quantity'],new['owned']),('WATCH',0,False))
+
+    def test_strong_uptrend_can_produce_funds_sized_buy_without_breakout(self):
+        now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
+        bars=[]
+        for i in range(80):
+            p=100+i
+            bars.append(dict(date=now.date()-dt.timedelta(days=80-i),open=p-.5,
+                             high=p+1,low=p-1,close=p,volume=100))
+        source={'cash':lambda:9234.70,'holdings':lambda:[],
+                'market':lambda now:{'up':False,'reason':'Index below 50-day average'},
+                'history':lambda token,now:bars,'quote':lambda symbol:179,
+                'intraday':lambda token,now,price:{'up':True,'reason':'Completed candles support price'},
+                'news':lambda company,now:{'articles':[],'flagged':[],
+                                           'reason':'No matching risk headline'}}
+        report=portfolio.recommend({'stocks':[{'symbol':'NEWCO','instrument_token':1}]},now,source)
+        self.assertEqual(report['items'][0]['action'],'BUY')
+        self.assertGreater(report['items'][0]['quantity'],0)
+        self.assertLessEqual(report['proposed'],report['budget'])
 
 
 if __name__=='__main__': unittest.main()

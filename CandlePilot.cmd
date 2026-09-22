@@ -6,7 +6,7 @@ if %errorlevel% equ 0 (
 ) else (
     set "CP_PY=python"
 )
-%CP_PY% -c "import kiteconnect, keyring" >nul 2>nul
+%CP_PY% -c "import certifi, kiteconnect, keyring" >nul 2>nul
 if errorlevel 1 (
     echo Installing Candle Pilot dependencies for this Windows user...
     %CP_PY% -m pip install -r requirements.txt
