@@ -62,7 +62,8 @@ class PortfolioTests(unittest.TestCase):
                 'news':lambda company,now:(_ for _ in ()).throw(TimeoutError('offline'))}
         result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
         self.assertEqual(result['proposed'],0)
-        self.assertEqual(result['items'][0]['action'],'SKIP')
+        self.assertEqual(result['items'][0]['action'],'WATCH')
+        self.assertIn('News unavailable',result['items'][0]['news_status'])
 
     def test_missing_intraday_candles_withhold_buy(self):
         now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
@@ -75,9 +76,10 @@ class PortfolioTests(unittest.TestCase):
                 'market':lambda now:{'up':True,'reason':'Index up'},
                 'history':lambda token,now:bars,'quote':lambda symbol:185,
                 'intraday':lambda token,now,price:(_ for _ in ()).throw(ValueError('stale')),
-                'news':lambda company,now:self.fail('Do not fetch news after intraday failure')}
+                'news':lambda company,now:{'articles':[{'title':'Routine company update'}],
+                                           'flagged':[],'reason':'One current headline'}}
         result=portfolio.recommend({'stocks':[{'symbol':'INFY','instrument_token':1}]},now,source)
-        self.assertEqual(result['items'][0]['action'],'SKIP')
+        self.assertEqual(result['items'][0]['action'],'WATCH')
         self.assertEqual(result['proposed'],0)
 
     def test_existing_holding_shows_sell_review_with_actual_quantity(self):
@@ -93,6 +95,24 @@ class PortfolioTests(unittest.TestCase):
         self.assertEqual(report['items'][0]['action'],'SELL')
         self.assertEqual(report['items'][0]['quantity'],7)
         self.assertEqual(report['proposed'],0)
+
+    def test_hold_is_reserved_for_owned_shares_and_shows_owned_quantity(self):
+        now=dt.datetime(2024,3,1,10,tzinfo=autopilot.IST)
+        bars=[dict(date=now.date()-dt.timedelta(days=80-i),open=100,high=102,
+                   low=99,close=100,volume=100) for i in range(80)]
+        source={'cash':lambda:10000,
+                'holdings':lambda:[{'exchange':'NSE','tradingsymbol':'OWNED','quantity':3}],
+                'market':lambda now:{'up':False,'reason':'Index weak'},
+                'history':lambda token,now:bars,'quote':lambda symbol:100,
+                'news':lambda company,now:{'articles':[],'flagged':[],'reason':'No current headline'},
+                'intraday':lambda token,now,price:{'up':False,'reason':'Not needed'}}
+        config={'stocks':[{'symbol':'OWNED','instrument_token':1},
+                          {'symbol':'NEWCO','instrument_token':2}]}
+        report=portfolio.recommend(config,now,source)
+        owned=next(x for x in report['items'] if x['symbol']=='OWNED')
+        new=next(x for x in report['items'] if x['symbol']=='NEWCO')
+        self.assertEqual((owned['action'],owned['quantity'],owned['owned']),('HOLD',3,True))
+        self.assertEqual((new['action'],new['quantity'],new['owned']),('WATCH',0,False))
 
 
 if __name__=='__main__': unittest.main()

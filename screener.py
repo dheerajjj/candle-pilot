@@ -6,7 +6,6 @@ import kite_sdk
 
 MAX_QUOTES = 400
 MAX_DEEP_RESEARCH = 12
-MAX_HELD_RESEARCH = 10
 
 
 def shortlist(kite=None, pause=time.sleep):
@@ -21,7 +20,7 @@ def shortlist(kite=None, pause=time.sleep):
     by_symbol={i['tradingsymbol']:i for i in instruments}
     held_symbols=[h['tradingsymbol'] for h in kite.holdings()
                   if h.get('exchange')=='NSE' and int(h.get('quantity') or 0)>0]
-    held_items=[by_symbol[s] for s in dict.fromkeys(held_symbols) if s in by_symbol][:MAX_HELD_RESEARCH]
+    held_items=[by_symbol[s] for s in dict.fromkeys(held_symbols) if s in by_symbol]
     quote_map={}
     for start in range(0,len(instruments),MAX_QUOTES):
         if start:
@@ -48,7 +47,8 @@ def shortlist(kite=None, pause=time.sleep):
     held_set={i['tradingsymbol'] for i in held_items}
     new_items=[item for _,item in liquid if item['tradingsymbol'] not in held_set][:MAX_DEEP_RESEARCH]
     stocks=[{'symbol':item['tradingsymbol'],'instrument_token':int(item['instrument_token']),
-             'company':item['name']} for item in held_items+new_items]
+             'company':item['name'],'owned':item['tradingsymbol'] in held_set}
+            for item in held_items+new_items]
     if not stocks:
         raise RuntimeError('No stocks passed liquidity and price screen today')
     return {'stocks':stocks,'universe':len(instruments),'quoted':len(quote_map),

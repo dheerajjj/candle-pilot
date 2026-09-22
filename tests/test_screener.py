@@ -30,6 +30,7 @@ class ScreenerTests(unittest.TestCase):
         self.assertEqual(result['held_count'],1)
         self.assertEqual(result['new_count'],0)
         self.assertEqual([s['symbol'] for s in result['stocks']],['NEWCO'])
+        self.assertTrue(result['stocks'][0]['owned'])
 
 
 if __name__=='__main__': unittest.main()

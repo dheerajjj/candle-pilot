@@ -17,14 +17,17 @@ import live_stream
 
 ROOT = pathlib.Path(__file__).resolve().parent
 WATCHLIST = ('INFY', 'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK')
-COLORS = {'BUY':'#087a56','SELL':'#b44739','HOLD':'#3e5a83','SKIP':'#73588c'}
+COLORS = {'BUY':'#087a56','SELL':'#b44739','HOLD':'#3e5a83','WATCH':'#9a6700','SKIP':'#73588c'}
 
 
 def decision_text(item):
     """Keep a missing price distinct from a real zero-priced trade."""
     price = item.get('price', item.get('paper_price'))
     price_label = f'₹{price:,.2f} ({item.get("price_type", "quote")})' if price is not None else 'Unavailable'
-    return f'Quantity: {item.get("quantity", 0)}   •   Price: {price_label}', item.get('reason', 'No reason available.')
+    qty_label = ('You own' if item.get('owned') else 'Suggested quantity')
+    cost = item.get('estimated_cost')
+    cost_label = f'   •   Estimated cost: ₹{cost:,.2f}' if cost is not None else ''
+    return f'{qty_label}: {item.get("quantity", 0)}   •   Price: {price_label}{cost_label}', item.get('reason', 'No reason available.')
 
 
 def paper_config():
@@ -88,14 +91,19 @@ class App:
     def show_report(self, report):
         window = tk.Toplevel(self.root)
         window.title('Candle Pilot · Budgeted suggestions')
-        window.geometry('780x650')
+        window.geometry('900x720')
         window.configure(bg='#f3f6fb')
         window.transient(self.root)
         window.focus_set()
         tk.Label(window,text='Your holdings and new ideas',font=('Segoe UI',20,'bold'),
                  bg='#f3f6fb',fg='#172b4d').pack(anchor='w',padx=22,pady=(18,2))
-        tk.Label(window,text=f'Kite current available balance: ₹{report["cash"]:,.2f}    •    Suggested spend: ₹{report["proposed"]:,.2f}    •    Budget cap: ₹{report["budget"]:,.2f}',
+        tk.Label(window,text=f'AVAILABLE ₹{report["cash"]:,.2f}     SUGGESTED ₹{report["proposed"]:,.2f}     KEPT ASIDE ₹{report.get("reserve",0):,.2f}',
                  font=('Segoe UI',11,'bold'),bg='#f3f6fb',fg='#087a56').pack(anchor='w',padx=23,pady=(4,2))
+        buy_message=(f'{report.get("buy_count",0)} qualified BUY idea(s) are sized from your current available balance.'
+                     if report.get('buy_count') else
+                     'No stock cleared every safety check now. Funds remain unallocated; WATCH is not a buy instruction.')
+        tk.Label(window,text=buy_message,font=('Segoe UI',10,'bold'),bg='#f3f6fb',
+                 fg='#9a6700' if not report.get('buy_count') else '#087a56').pack(anchor='w',padx=23,pady=(2,2))
         funds=report.get('funds',{})
         tk.Label(window,text=(f'Opening balance: ₹{funds.get("opening_balance",0):,.2f}  •  Raw cash: ₹{funds.get("raw_cash",0):,.2f}  •  '
                               f'Utilised debits: ₹{funds.get("utilised_debits",0):,.2f}  •  Collateral: ₹{funds.get("collateral",0):,.2f}'),
@@ -118,11 +126,17 @@ class App:
         scrollbar.pack(side='right',fill='y',pady=(0,18))
         canvas.pack(side='left',fill='both',expand=True,padx=(22,0),pady=(0,18))
         cards = tk.Frame(canvas,bg='#f3f6fb')
-        canvas.create_window((0,0),window=cards,anchor='nw',width=728)
+        canvas.create_window((0,0),window=cards,anchor='nw',width=838)
         cards.bind('<Configure>',lambda event:canvas.configure(scrollregion=canvas.bbox('all')))
         labels={}
         initial={}
-        for item in report['items']:
+        def section(title, subtitle):
+            tk.Label(cards,text=title,font=('Segoe UI',15,'bold'),bg='#f3f6fb',fg='#172b4d',
+                     anchor='w').pack(fill='x',pady=(8,0))
+            tk.Label(cards,text=subtitle,font=('Segoe UI',9),bg='#f3f6fb',fg='#52647c',
+                     anchor='w').pack(fill='x',pady=(0,7))
+
+        def add_card(item):
             card = tk.Frame(cards,bg='white',highlightbackground='#dce3ed',highlightthickness=1)
             card.pack(fill='x',pady=(0,10))
             header = tk.Frame(card,bg='white')
@@ -133,20 +147,34 @@ class App:
                      bg='white',fg=COLORS.get(item['action'],'#52647c')).pack(side='right')
             if item.get('company') and item['company']!=item['symbol']:
                 tk.Label(card,text=item['company'],font=('Segoe UI',10),bg='white',fg='#52647c',
-                         anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,3))
+                         anchor='w',wraplength=800).pack(fill='x',padx=16,pady=(0,3))
             detail, reason = decision_text(item)
-            tk.Label(card,text=detail,font=('Segoe UI',10),bg='white',fg='#253b5a',
+            tk.Label(card,text=detail,font=('Segoe UI',10,'bold'),bg='white',fg='#253b5a',
                      anchor='w').pack(fill='x',padx=16,pady=(0,3))
-            tk.Label(card,text='Why: '+reason,font=('Segoe UI',10),bg='white',fg='#52647c',
-                     justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,13))
+            tk.Label(card,text='DECISION  '+reason,font=('Segoe UI',10),bg='white',fg='#52647c',
+                     justify='left',anchor='w',wraplength=800).pack(fill='x',padx=16,pady=(0,7))
+            tk.Label(card,text='NEWS  '+item.get('news_status','Unavailable'),font=('Segoe UI',9),
+                     bg='#f7f9fc',fg='#52647c',justify='left',anchor='w',wraplength=800
+                     ).pack(fill='x',padx=16,pady=(0,5))
+            for headline in item.get('headlines',[])[:2]:
+                tk.Label(card,text='• '+headline['title'],font=('Segoe UI',9),bg='white',fg='#334e68',
+                         justify='left',anchor='w',wraplength=800).pack(fill='x',padx=20,pady=(0,3))
             live_label=tk.StringVar(value='Live price: waiting for tick…')
             tk.Label(card,textvariable=live_label,font=('Segoe UI',10),bg='white',fg='#087a56',
                      anchor='w').pack(fill='x',padx=16,pady=(0,10))
             labels[item['symbol']]=live_label
             initial[item['symbol']]=item.get('price')
-            if item.get('headlines'):
-                tk.Label(card,text='Recent headline: '+item['headlines'][0]['title'],font=('Segoe UI',9),
-                         bg='white',fg='#52647c',justify='left',anchor='w',wraplength=690).pack(fill='x',padx=16,pady=(0,12))
+
+        section('Your Kite holdings','Only shares currently reported in your NSE holdings are shown here. Quantity means shares owned.')
+        if report.get('holding_items'):
+            for item in report['holding_items']:
+                add_card(item)
+        else:
+            tk.Label(cards,text='No positive-quantity NSE holdings were returned by Kite.',bg='white',
+                     fg='#52647c',anchor='w').pack(fill='x',pady=(0,10),ipadx=14,ipady=12)
+        section('New market opportunities','BUY includes a funds-based quantity. WATCH means observe only; quantity remains zero.')
+        for item in report.get('idea_items',[]):
+            add_card(item)
         token_to_symbol={int(stock['instrument_token']):stock['symbol']
                          for stock in screen.get('stocks',[]) if stock['symbol'] in labels}
         stream=live_stream.LivePrices(token_to_symbol)

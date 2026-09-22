@@ -22,8 +22,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('150.25 (simulated fill)',detail)
         self.assertEqual(reason,'Breakout')
         detail,_=desktop.decision_text({'action':'HOLD','quantity':0,'price':100,
-            'price_type':'previous close'})
+            'owned':True,'price_type':'previous close'})
         self.assertIn('previous close',detail)
+        self.assertIn('You own',detail)
 
     def test_full_market_shortlist_used_for_desktop(self):
         sample={'stocks':[{'symbol':'OTHER','instrument_token':100,'company':'Other Co'}],

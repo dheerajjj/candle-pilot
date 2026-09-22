@@ -1,5 +1,11 @@
 # Candle Pilot — Personal Kite stock research agent
 
+## Version 0.8: correct holdings, visible news and clearer funds-based ideas
+
+The result window now has two explicit sections: **Your Kite holdings** and **New market opportunities**. `HOLD` is used only for a positive-quantity NSE holding returned by Kite, and its actual owned quantity is shown. New stocks that do not qualify for purchase are labelled `WATCH`, never `HOLD`. The previous ten-holding research limit has been removed, so every positive-quantity NSE holding found in the current Kite instrument list is included.
+
+Every displayed assessment now performs a headline lookup and shows its news status plus up to two recent matching headlines. A news outage or lack of a matching current headline is visible and cannot silently pass the BUY gate. Qualified BUY cards show the suggested quantity and estimated cost, sized from the current Kite available balance under the existing safety limits: at most half the available balance, ₹5,000 total, ₹2,500 per stock and ten shares. If no stock clears all technical, market, completed five-minute candle and news checks, the screen clearly says that no BUY qualified and leaves funds unallocated. Candle Pilot does not force a trade merely because cash is available.
+
 ## Version 0.7: live prices while the results window is open
 
 After the user logs in and a read-only recommendation report appears, Candle Pilot now opens **one** official KiteTicker WebSocket connection in a separate thread and subscribes to the report's instrument tokens in LTP mode. Each card shows the last received live price. The connection closes when the results window closes. The UI indicates disconnections, reconnects, prices that moved over 1% from the analyzed quote, and any symbol with no new tick for 60 seconds. No tick means no recent trade update; it does not necessarily mean the socket failed.

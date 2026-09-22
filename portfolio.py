@@ -28,7 +28,8 @@ def recommend(config, now=None, source=None):
     if not math.isfinite(cash) or cash < 0:
         raise ValueError('Kite available funds unavailable; no recommendations made')
     holding_rows = source['holdings']()
-    held = {x['tradingsymbol']:int(x['quantity']) for x in holding_rows if x.get('exchange')=='NSE'}
+    held = {x['tradingsymbol']:int(x.get('quantity') or 0) for x in holding_rows
+            if x.get('exchange')=='NSE' and int(x.get('quantity') or 0)>0}
     holdings_value = sum(float(x.get('last_price') or x.get('average_price') or 0)*int(x.get('quantity') or 0)
                          for x in holding_rows if x.get('exchange')=='NSE')
     holdings_pnl = sum(float(x.get('pnl') or 0) for x in holding_rows if x.get('exchange')=='NSE')
@@ -39,6 +40,7 @@ def recommend(config, now=None, source=None):
     candidates = []
     for stock in config['stocks']:
         symbol = stock['symbol']
+        owned = held.get(symbol,0)>0
         try:
             bars = source['history'](stock['instrument_token'],now)
             detail = signal_details(bars,len(bars)-1)
@@ -46,37 +48,43 @@ def recommend(config, now=None, source=None):
             price = float(source['quote'](symbol))
             if not math.isfinite(price) or price <= 0:
                 raise ValueError('Invalid quote')
-            eligible = (not held.get(symbol,0) and detail['signal']=='BUY' and market['up']
-                        and candle['name']!='Bearish engulfing' and abs(price/bars[-1]['close']-1)<=.12)
+            try:
+                news = source['news'](stock.get('company',symbol),now)
+            except Exception as exc:
+                news = {'articles':[],'flagged':[],
+                        'reason':'News unavailable: '+str(exc),'unavailable':True}
+            eligible = (not owned and detail['signal']=='BUY' and market['up']
+                        and candle['name']!='Bearish engulfing' and abs(price/bars[-1]['close']-1)<=.12
+                        and bool(news.get('articles')) and not news.get('flagged')
+                        and not news.get('unavailable'))
             minutes=(source['intraday'](stock['instrument_token'],now,price) if eligible else
-                     {'up':False,'reason':'Not requested because an earlier check did not clear.'})
-            news = (source['news'](stock.get('company',symbol),now) if eligible and minutes['up'] else
-                    {'articles':[],'reason':'Not requested because a technical, market, or holdings check did not clear.'})
+                     {'up':False,'reason':'Not required because earlier buy checks did not all clear.'})
             why = (f'{detail["reason"]} Candle: {candle["name"]}. '
                    f'Market: {market["reason"]} Intraday: {minutes["reason"]} News: {news["reason"]}')
-            card = {'symbol':symbol,'company':stock.get('company',symbol),'action':'HOLD','quantity':0,'price':price,
-                    'price_type':'current quote','reason':why,'headlines':news.get('articles',[])[:1]}
-            if held.get(symbol,0)>0:
+            card = {'symbol':symbol,'company':stock.get('company',symbol),
+                    'action':'HOLD' if owned else 'WATCH','owned':owned,
+                    'quantity':held.get(symbol,0) if owned else 0,'price':price,
+                    'price_type':'current quote','reason':why,
+                    'technical':detail['reason'],'candle':candle['name'],
+                    'market':market['reason'],'intraday':minutes['reason'],
+                    'news_status':news['reason'],'headlines':news.get('articles',[])[:2]}
+            if owned:
                 if detail['signal']=='SELL':
                     card['action']='SELL'
                     card['quantity']=held[symbol]
                     card['reason']=f'Exit rule triggered for {held[symbol]} held share(s); review in Kite before acting. '+why
                 else:
-                    card['reason']='Already held in Kite; no additional buy suggested. '+why
+                    card['reason']=f'You own {held[symbol]} share(s). Hold/review; no additional buy suggested. '+why
             elif detail['signal']!='BUY':
-                card['reason']='Buy conditions did not clear. '+why
+                card['reason']='Watch only—buy conditions did not clear. '+why
             elif not market['up'] or candle['name']=='Bearish engulfing':
-                card['action']='SKIP'
-                card['reason']='Buy withheld by market or candle check. '+why
+                card['reason']='Watch only—market or candle confirmation did not clear. '+why
             elif abs(price/bars[-1]['close']-1)>.12:
-                card['action']='SKIP'
-                card['reason']='Current price moved more than 12% from last close. '+why
+                card['reason']='Watch only—price moved more than 12% from last close. '+why
+            elif not news.get('articles') or news.get('flagged') or news.get('unavailable'):
+                card['reason']='Watch only—news confirmation is missing or needs review. '+why
             elif not minutes['up']:
-                card['action']='SKIP'
-                card['reason']='Buy withheld by completed 5-minute candle check. '+why
-            elif not news.get('articles') or news.get('flagged'):
-                card['action']='SKIP'
-                card['reason']='Buy withheld by missing news or headline review flag. '+why
+                card['reason']='Watch only—completed 5-minute candle confirmation did not clear. '+why
             else:
                 recent=bars[-1]
                 prior_high=max(x['high'] for x in bars[-21:-1])
@@ -86,8 +94,11 @@ def recommend(config, now=None, source=None):
                 continue
             rows_out.append(card)
         except Exception as exc:
-            rows_out.append({'symbol':symbol,'company':stock.get('company',symbol),'action':'SKIP','quantity':0,'price':None,
-                             'reason':'Data or news unavailable; no buy suggested: '+str(exc)})
+            rows_out.append({'symbol':symbol,'company':stock.get('company',symbol),
+                             'action':'HOLD' if owned else 'WATCH','owned':owned,
+                             'quantity':held.get(symbol,0) if owned else 0,'price':None,
+                             'news_status':'Unavailable','headlines':[],
+                             'reason':'Data unavailable; no buy suggested: '+str(exc)})
     # Keep half the account cash untouched, cap total at ₹5k and each name at ₹2.5k.
     limit=min(cash*.5,5000.0)
     remaining=limit
@@ -98,13 +109,18 @@ def recommend(config, now=None, source=None):
         if qty:
             card['action']='BUY'
             card['quantity']=qty
-            card['reason']=f'Proposed {qty} shares within ₹2,500 per stock and total ₹{limit:,.2f} budget. '+card['reason']
+            card['estimated_cost']=qty*price
+            card['reason']=f'Buy idea: {qty} share(s), sized from the ₹{cash:,.2f} available balance. '+card['reason']
             remaining-=qty*price*1.01
         else:
-            card['action']='SKIP'
-            card['reason']='Not enough remaining recommendation budget for one share. '+card['reason']
+            card['action']='WATCH'
+            card['reason']='Watch only—not enough remaining recommendation budget for one share. '+card['reason']
         rows_out.append(card)
-    rows_out.sort(key=lambda item:({'SELL':0,'BUY':1,'HOLD':2,'SKIP':3}.get(item['action'],4),item['symbol']))
+    rows_out.sort(key=lambda item:(0 if item.get('owned') else 1,
+                                  {'SELL':0,'HOLD':1,'BUY':0,'WATCH':1}.get(item['action'],2),item['symbol']))
     return {'cash':cash,'funds':funds,'holdings_value':holdings_value,'holdings_pnl':holdings_pnl,
             'budget':limit,'proposed':sum(r['quantity']*r['price'] for r in rows_out if r['action']=='BUY'),
+            'reserve':cash-limit,'buy_count':sum(r['action']=='BUY' for r in rows_out),
+            'holding_items':[r for r in rows_out if r.get('owned')],
+            'idea_items':[r for r in rows_out if not r.get('owned')],
             'items':rows_out}
